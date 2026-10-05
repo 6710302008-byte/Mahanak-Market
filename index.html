@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ตู้บริการข้อมูล ตลาดมหานาค - Touchscreen Kiosk</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkwood: '#2E1A0C',
+                        darkwoodlight: '#422817',
+                        terracotta: '#A83E0E',
+                        terracottalight: '#C84F16',
+                        kioskcream: '#FDFBF7',
+                        amberaccent: '#F59E0B',
+                        amberdark: '#D97706',
+                    },
+                    fontFamily: {
+                        sans: ['Kanit', 'sans-serif'],
+                    },
+                    aspectRatio: {
+                        'kiosk': '1 / 2',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts: Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS & JS for Interactive Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Kiosk Custom Scrollbar & Touches */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2E1A0C;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #A83E0E;
+            border-radius: 4px;
+        }
+        
+        .kiosk-touch-active:active {
+            transform: scale(0.97);
+            filter: brightness(1.15);
+        }
+
+        /* Continuous News Ticker Animation */
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 28s linear infinite;
+        }
+
+        /* SOS Screen Flash Effect */
+        @keyframes sosFlash {
+            0%, 100% { background-color: rgba(220, 38, 38, 0.95); }
+            50% { background-color: rgba(127, 29, 29, 0.95); }
+        }
+        .sos-flashing {
+            animation: sosFlash 0.5s infinite;
+        }
+
+        /* Leaflet Map Custom Marker Styles */
+        .stall-marker-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            color: white;
+            font-weight: 700;
+            font-size: 13px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border: 2px solid #FDFBF7;
+            transition: all 0.2s ease;
+        }
+        .stall-marker-pin:hover {
+            transform: scale(1.2);
+            z-index: 1000 !important;
+        }
+
+        /* Prevent unwanted touch dragging on UI background */
+        body {
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-[#1a0f07] font-sans h-full w-full flex justify-center items-center overflow-hidden p-0 sm:p-2">
+
+    <!-- Main Vertical Kiosk Display Container (Aspect Ratio 1:2 optimization, scalable to 100vh) -->
+    <div id="kiosk-wrapper" class="relative w-full h-full max-w-[600px] max-h-[1200px] bg-darkwood text-kioskcream flex flex-col shadow-2xl overflow-hidden border-0 sm:border-4 border-amberaccent/30 sm:rounded-3xl">
+
+        <!-- ================= HEADER SECTION ================= -->
+        <header class="bg-gradient-to-b from-[#3a2110] to-darkwood p-4 pb-2 border-b border-terracotta/40 flex-none z-20">
+            <div class="flex justify-between items-center mb-2">
+                <!-- Branding & Title -->
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-terracotta to-amberaccent flex items-center justify-center text-kioskcream shadow-lg text-2xl font-black">
+                        <i class="fa-solid font-bold fa-store"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-wide leading-none text-amberaccent">ตู้บริการข้อมูล ตลาดมหานาค</h1>
+                        <p class="text-xs text-kioskcream/70 mt-0.5 font-light">Mahanak Market Wholesale Kiosk (600x1200 Terminal)</p>
+                    </div>
+                </div>
+
+                <!-- Clock & Status & Dev Button -->
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <div id="kiosk-clock" class="text-lg font-bold font-mono text-amberaccent leading-none">00:00:00</div>
+                        <div id="kiosk-date" class="text-[10px] text-kioskcream/60">5 ต.ค. 2026</div>
+                    </div>
+                    
+                    <!-- Developer Mode Trigger -->
+                    <button onclick="openDevPinModal()" class="w-11 h-11 rounded-xl bg-darkwoodlight hover:bg-terracotta border border-amberaccent/30 text-amberaccent flex items-center justify-center text-lg kiosk-touch-active transition-all" title="สำหรับผู้ดูแลระบบ">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ticker Announcement Bar -->
+            <div class="bg-black/40 rounded-xl px-3 py-1.5 flex items-center gap-2 border border-amberaccent/20 overflow-hidden text-xs">
+                <span class="bg-terracotta text-white font-bold text-[10px] px-2 py-0.5 rounded-md flex-none flex items-center gap-1">
+                    <i class="fa-solid fa-bullhorn text-[10px]"></i> ประกาศ
+                </span>
+                <div class="overflow-hidden relative w-full text-amberaccent/90 font-medium">
+                    <div id="announcement-ticker" class="animate-marquee">
+                        ยินดีต้อนรับสู่ ตลาดมหานาค (ศูนย์กลางค้าส่งผลไม้ไทย-นำเข้า) • เปิดบริการ 24 ชั่วโมง • ติดต่อสอบถามและเช็คราคากลางได้ที่ตู้นี้
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ================= MAIN WORKSPACE (TAB CONTENTS) ================= -->
+        <main id="kiosk-main-content" class="flex-1 relative overflow-hidden bg-[#241409]">
+
+            <!-- ---------------- TAB 1: HOME & QUICK SEARCH ---------------- -->
+            <section id="tab-home" class="tab-page absolute inset-0 p-4 overflow-y-auto flex flex-col gap-4">
+                <!-- Welcome Kiosk Banner -->
+                <div class="relative rounded-2xl overflow-hidden bg-gradient-to-r from-terracotta to-[#732704] p-5 shadow-xl border border-amberaccent/30 flex justify-between items-center">
+                    <div class="space-y-1.5 z-10 max-w-[70%]">
+                        <span class="bg-amberaccent/20 text-amberaccent text-xs font-semibold px-2.5 py-1 rounded-full border border-amberaccent/40">
+                            🍉 ตลาดผลไม้ราคาส่ง 24 ชม.
+                        </span>
+                        <h2 class="text-2xl font-black text-white leading-tight">ยินดีต้อนรับสู่<br><span class="text-amberaccent">ตลาดมหานาค</span></h2>
+                        <p class="text-xs text-kioskcream/80">ค้นหาแผงค้า ราคาส่งผลไม้ หรือดูผังตลาดได้ง่ายๆ เพียงสัมผัสหน้าจอ</p>
+                    </div>
+                    <div class="text-6xl text-amberaccent/30">
+                        <i class="fa-solid fa-basket-shopping"></i>
+                    </div>
+                </div>
+
+                <!-- Touch Kiosk Search Input Box -->
+                <div class="relative">
+                    <div class="flex items-center bg-darkwoodlight border-2 border-amberaccent/40 rounded-2xl p-1.5 shadow-lg">
+                        <i class="fa-solid fa-magnifying-glass text-amberaccent text-xl ml-3 mr-2"></i>
+                        <input type="text" id="kiosk-search-input" readonly onclick="toggleVirtualKeyboard(true)" placeholder="แตะเพื่อค้นหาแผงค้า เช่น ทุเรียน, มะม่วง, A01..." 
+                               class="w-full bg-transparent text-kioskcream placeholder-kioskcream/50 font-medium text-lg focus:outline-none cursor-pointer py-1">
+                        <button onclick="clearSearch()" id="clear-search-btn" class="hidden px-3 text-kioskcream/60 hover:text-white">
+                            <i class="fa-solid fa-circle-xmark text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Category Filter Chips -->
+                <div>
+                    <h3 class="text-sm font-semibold text-amberaccent mb-2.5 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group"></i> หมวดหมู่ผลไม้ยอดนิยม
+                    </h3>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button onclick="filterCategory('ALL')" class="cat-chip active p-3 rounded-xl bg-terracotta text-white font-bold text-left flex items-center justify-between border border-amberaccent/40 kiosk-touch-active shadow-md">
+                            <span><i class="fa-solid fa-border-all mr-2"></i>ทั้งหมด</span>
+                            <span class="text-xs bg-black/30 px-2 py-0.5 rounded-md">35 ร้าน</span>
+                        </button>
+                        <button onclick="filterCategory('ผลไม้ไทย')" class="cat-chip p-3 rounded-xl bg-darkwoodlight text-kioskcream/90 font-bold text-left flex items-center justify-between border border-amberaccent/20 hover:border-amberaccent kiosk-touch-active shadow-md">
+                            <span><i class="fa-solid fa-mango mr-2 text-amberaccent"></i>ผลไม้ไทย</span>
+                            <span class="text-xs bg-black/30 px-2 py-0.5 rounded-md">15 ร้าน</span>
+                        </button>
+                        <button onclick="filterCategory('ผลไม้นำเข้า')" class="cat-chip p-3 rounded-xl bg-darkwoodlight text-kioskcream/90 font-bold text-left flex items-center justify-between border border-amberaccent/20 hover:border-amberaccent kiosk-touch-active shadow-md">
+                            <span><i class="fa-solid fa-apple-whole mr-2 text-red-400"></i>ผลไม้นำเข้า</span>
+                            <span class="text-xs bg-black/30 px-2 py-0.5 rounded-md">8 ร้าน</span>
+                        </button>
+                        <button onclick="filterCategory('ตระกูลส้ม')" class="cat-chip p-3 rounded-xl bg-darkwoodlight text-kioskcream/90 font-bold text-left flex items-center justify-between border border-amberaccent/20 hover:border-amberaccent kiosk-touch-active shadow-md">
+                            <span><i class="fa-solid fa-lemon mr-2 text-yellow-400"></i>ตระกูลส้ม</span>
+                            <span class="text-xs bg-black/30 px-2 py-0.5 rounded-md">7 ร้าน</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Featured Stalls Grid Carousel -->
+                <div class="flex-1 flex flex-col min-h-0">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-semibold text-amberaccent flex items-center gap-2">
+                            <i class="fa-solid fa-star text-amberaccent"></i> แผงค้าแนะนำประจำวัน
+                        </h3>
+                        <span class="text-xs text-kioskcream/60">แตะเพื่อดูรายละเอียด</span>
+                    </div>
+
+                    <!-- Dynamic Stalls Grid for Home -->
+                    <div id="home-featured-grid" class="grid grid-cols-2 gap-3 overflow-y-auto pr-1 pb-4">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------- TAB 2: INTERACTIVE FLOOR MAP ---------------- -->
+            <section id="tab-map" class="tab-page absolute inset-0 hidden flex flex-col">
+                <!-- Map Header Floating Action Bar -->
+                <div class="bg-darkwoodlight/90 border-b border-terracotta/40 p-3 flex justify-between items-center z-10 shadow-lg">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-map-location-dot text-amberaccent text-xl"></i>
+                        <div>
+                            <h2 class="font-bold text-sm text-amberaccent leading-none">ผังแผงค้าตลาดมหานาค</h2>
+                            <p class="text-[11px] text-kioskcream/70">แตะหมุดบนแผนที่เพื่อดูข้อมูลร้าน</p>
+                        </div>
+                    </div>
+
+                    <!-- Scan Stall QR Button positioned safely without obscuring map controls -->
+                    <button onclick="openQrScanModal()" class="bg-terracotta hover:bg-terracottalight text-white font-bold px-3.5 py-2 rounded-xl border border-amberaccent/40 flex items-center gap-2 text-xs shadow-lg kiosk-touch-active">
+                        <i class="fa-solid fa-qrcode text-base"></i>
+                        <span>สแกน QR แผง</span>
+                    </button>
+                </div>
+
+                <!-- Zone Quick Selector Overlay -->
+                <div class="bg-darkwood/90 px-3 py-2 flex gap-2 border-b border-amberaccent/20 overflow-x-auto z-10 flex-none">
+                    <button onclick="zoomToZone('ALL')" class="bg-amberaccent/20 text-amberaccent border border-amberaccent/40 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap kiosk-touch-active">
+                        ดูรวมทั้งหมด
+                    </button>
+                    <button onclick="zoomToZone('A')" class="bg-darkwoodlight border border-amberaccent/30 text-kioskcream px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap kiosk-touch-active">
+                        🟢 โซน A (ผลไม้ไทย)
+                    </button>
+                    <button onclick="zoomToZone('B')" class="bg-darkwoodlight border border-amberaccent/30 text-kioskcream px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap kiosk-touch-active">
+                        🔴 โซน B (นำเข้า)
+                    </button>
+                    <button onclick="zoomToZone('C')" class="bg-darkwoodlight border border-amberaccent/30 text-kioskcream px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap kiosk-touch-active">
+                        🟠 โซน C (ตระกูลส้ม)
+                    </button>
+                    <button onclick="zoomToZone('D')" class="bg-darkwoodlight border border-amberaccent/30 text-kioskcream px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap kiosk-touch-active">
+                        🟣 โซน D (แปรรูป)
+                    </button>
+                </div>
+
+                <!-- Leaflet Interactive Container -->
+                <div id="leaflet-map-container" class="flex-1 w-full h-full bg-[#1b0f08] z-0"></div>
+            </section>
+
+            <!-- ---------------- TAB 3: STALL DIRECTORY ---------------- -->
+            <section id="tab-directory" class="tab-page absolute inset-0 hidden p-4 flex flex-col gap-3">
+                <div class="flex justify-between items-center border-b border-terracotta/40 pb-2">
+                    <div>
+                        <h2 class="text-xl font-bold text-amberaccent">รายชื่อแผงค้าทั้งหมด</h2>
+                        <p class="text-xs text-kioskcream/70">รวมแผงค้าผลไม้คุณภาพ 35 แผง พร้อมเบอร์ติดต่อและราคา</p>
+                    </div>
+                    <span id="directory-count-badge" class="bg-terracotta text-white text-xs font-bold px-3 py-1 rounded-full border border-amberaccent/40">
+                        35 รายการ
+                    </span>
+                </div>
+
+                <!-- Directory Filter Controls -->
+                <div class="flex gap-2">
+                    <input type="text" id="dir-search-input" oninput="handleDirectorySearch(this.value)" placeholder="พิมพ์ชื่อร้าน หรือ ชนิดผลไม้..." 
+                           class="flex-1 bg-darkwoodlight border border-amberaccent/30 rounded-xl px-3 py-2 text-sm text-kioskcream placeholder-kioskcream/50 focus:outline-none focus:border-amberaccent">
+                    <select id="dir-zone-select" onchange="handleDirectoryZoneFilter(this.value)" class="bg-darkwoodlight border border-amberaccent/30 rounded-xl px-2 py-2 text-xs font-bold text-amberaccent focus:outline-none">
+                        <option value="ALL">ทุกโซน</option>
+                        <option value="A">โซน A</option>
+                        <option value="B">โซน B</option>
+                        <option value="C">โซน C</option>
+                        <option value="D">โซน D</option>
+                    </select>
+                </div>
+
+                <!-- Stalls Directory Scrollable Grid -->
+                <div id="directory-stalls-list" class="flex-1 overflow-y-auto grid grid-cols-1 gap-3 pr-1 pb-4">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </section>
+
+            <!-- ---------------- TAB 4: SOS EMERGENCY SYSTEM ---------------- -->
+            <section id="tab-sos" class="tab-page absolute inset-0 hidden p-5 flex flex-col items-center justify-between text-center overflow-y-auto">
+                <div class="space-y-2 mt-4">
+                    <div class="w-20 h-20 rounded-full bg-red-600/20 border-2 border-red-500 flex items-center justify-center text-red-500 mx-auto text-4xl animate-pulse">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h2 class="text-2xl font-black text-red-500">ระบบขอความช่วยเหลือฉุกเฉิน (SOS)</h2>
+                    <p class="text-xs text-kioskcream/80 max-w-sm mx-auto">
+                        หากท่านพบอุบัติเหตุ เจ็บป่วยกระทันหัน หรือต้องการความช่วยเหลือด่วนภายในตลาด สามารถกดปุ่มด้านล่างเพื่อส่งสัญญาณเตือนเจ้าหน้าที่
+                    </p>
+                </div>
+
+                <!-- Big Touch Emergency Button -->
+                <div class="my-6">
+                    <button onclick="confirmTriggerSOS()" class="w-56 h-56 rounded-full bg-gradient-to-tr from-red-700 via-red-600 to-red-500 border-8 border-red-900/60 shadow-[0_0_50px_rgba(220,38,38,0.6)] text-white flex flex-col items-center justify-center gap-2 kiosk-touch-active active:scale-95 transition-all mx-auto">
+                        <i class="fa-solid fa-bell text-5xl animate-bounce"></i>
+                        <span class="text-2xl font-black tracking-wider">กดเพื่อขอ<br>ความช่วยเหลือ</span>
+                    </button>
+                </div>
+
+                <!-- Emergency Contact Hotline Numbers -->
+                <div class="w-full bg-darkwoodlight border border-red-500/30 rounded-2xl p-4 space-y-3">
+                    <h3 class="text-xs font-bold text-amberaccent uppercase tracking-wider">เบอร์โทรศัพท์ฉุกเฉินตลาดมหานาค</h3>
+                    <div class="grid grid-cols-2 gap-2 text-left">
+                        <div class="bg-black/40 p-2.5 rounded-xl border border-white/10">
+                            <div class="text-[10px] text-kioskcream/60">ศูนย์รปภ. ตลาด</div>
+                            <div class="text-sm font-bold text-red-400">02-123-4567</div>
+                        </div>
+                        <div class="bg-black/40 p-2.5 rounded-xl border border-white/10">
+                            <div class="text-[10px] text-kioskcream/60">ห้องพยาบาล</div>
+                            <div class="text-sm font-bold text-emerald-400">02-123-4568</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ================= VIRTUAL KEYBOARD POPUP OVERLAY ================= -->
+        <div id="virtual-keyboard-overlay" class="hidden absolute bottom-24 left-0 right-0 bg-[#1c1007] border-t-2 border-amberaccent/50 p-3 z-30 shadow-2xl transition-all">
+            <div class="flex justify-between items-center mb-2 px-1">
+                <span class="text-xs font-bold text-amberaccent flex items-center gap-2">
+                    <i class="fa-solid fa-keyboard"></i> แป้นพิมพ์สัมผัส Kiosk
+                </span>
+                <div class="flex gap-2">
+                    <button onclick="switchKeyboardLang()" id="kb-lang-btn" class="bg-darkwoodlight border border-amberaccent/40 text-amberaccent text-xs px-3 py-1 rounded-lg font-bold">
+                        TH / EN
+                    </button>
+                    <button onclick="toggleVirtualKeyboard(false)" class="bg-red-600/80 text-white text-xs px-3 py-1 rounded-lg font-bold">
+                        ปิด <i class="fa-solid fa-xmark ml-1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Virtual Keys Grid -->
+            <div id="vk-keys-container" class="grid grid-cols-10 gap-1 text-center font-bold">
+                <!-- Keys dynamically rendered in JS -->
+            </div>
+        </div>
+
+        <!-- ================= BOTTOM NAVIGATION BAR ================= -->
+        <footer class="bg-gradient-to-t from-[#201107] to-darkwood border-t border-terracotta/50 p-2 flex-none z-20 shadow-2xl">
+            <div class="grid grid-cols-4 gap-2">
+                <button onclick="switchTab('home')" id="nav-btn-home" class="kiosk-nav-btn active flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-terracotta text-white border border-amberaccent/40 kiosk-touch-active">
+                    <i class="fa-solid fa-house text-2xl mb-1"></i>
+                    <span class="text-xs font-bold">หน้าแรก</span>
+                </button>
+                
+                <button onclick="switchTab('map')" id="nav-btn-map" class="kiosk-nav-btn flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-darkwoodlight text-kioskcream/70 border border-amberaccent/20 hover:border-amberaccent kiosk-touch-active">
+                    <i class="fa-solid fa-map-location-dot text-2xl mb-1"></i>
+                    <span class="text-xs font-bold">ผังแผงค้า</span>
+                </button>
+
+                <button onclick="switchTab('directory')" id="nav-btn-directory" class="kiosk-nav-btn flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-darkwoodlight text-kioskcream/70 border border-amberaccent/20 hover:border-amberaccent kiosk-touch-active">
+                    <i class="fa-solid fa-store text-2xl mb-1"></i>
+                    <span class="text-xs font-bold">รายการแผงค้า</span>
+                </button>
+
+                <button onclick="switchTab('sos')" id="nav-btn-sos" class="kiosk-nav-btn flex flex-col items-center justify-center py-3 px-1 rounded-2xl bg-red-950/60 text-red-400 border border-red-600/40 hover:bg-red-900/80 kiosk-touch-active">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl mb-1 animate-pulse"></i>
+                    <span class="text-xs font-bold">SOS ฉุกเฉิน</span>
+                </button>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- ================= SHOP DETAILS & LOCATION QR MODAL ================= -->
+    <div id="shop-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-darkwood border-2 border-amberaccent rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="relative h-48 bg-darkwoodlight flex-none overflow-hidden">
+                <img id="modal-shop-img" src="" alt="Shop" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-gradient-to-t from-darkwood via-transparent to-black/40"></div>
+                
+                <button onclick="closeShopModal()" class="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center text-xl font-bold border border-white/20">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+                <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end">
+                    <div>
+                        <span id="modal-stall-id" class="bg-terracotta text-white text-xs font-bold px-2.5 py-1 rounded-lg border border-amberaccent/40">
+                            #A01
+                        </span>
+                        <h3 id="modal-shop-name" class="text-xl font-bold text-white mt-1 leading-tight">ชื่อแผงค้า</h3>
+                        <p id="modal-category" class="text-xs text-amberaccent font-medium">หมวดหมู่ผลไม้</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Content Body -->
+            <div class="p-4 space-y-4 overflow-y-auto flex-1">
+                <!-- Phone Call Action -->
+                <div class="flex items-center justify-between bg-darkwoodlight border border-amberaccent/20 p-3 rounded-2xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-phone"></i>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-kioskcream/60">เบอร์โทรศัพท์เจ้าของแผง</div>
+                            <div id="modal-phone" class="font-bold text-sm text-kioskcream">081-XXX-XXXX</div>
+                        </div>
+                    </div>
+                    <a id="modal-call-link" href="#" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 kiosk-touch-active">
+                        <i class="fa-solid fa-phone"></i> โทรออก
+                    </a>
+                </div>
+
+                <!-- Product Price List -->
+                <div>
+                    <h4 class="text-xs font-bold text-amberaccent uppercase mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-tags"></i> รายการสินค้าและราคากลางประจำวัน
+                    </h4>
+                    <div id="modal-price-list" class="space-y-1.5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- QR Location Code for User Mobile Navigation -->
+                <div class="bg-black/40 border border-amberaccent/30 rounded-2xl p-3 flex items-center gap-3">
+                    <div class="w-24 h-24 bg-white p-1.5 rounded-xl flex-none flex items-center justify-center">
+                        <img id="modal-qr-img" src="" alt="Stall QR Code" class="w-full h-full object-contain">
+                    </div>
+                    <div class="text-left space-y-1">
+                        <span class="text-xs font-bold text-amberaccent block"><i class="fa-solid fa-qrcode mr-1"></i> QR ตำแหน่งร้านค้า</span>
+                        <p class="text-[11px] text-kioskcream/80">สแกนด้วยโทรศัพท์มือถือ เพื่อบันทึกพิกัดและนำทางไปยังแผงนี้ในตลาด</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= QR CODE SCANNER MODAL SIMULATION ================= -->
+    <div id="qr-scan-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-darkwood border border-amberaccent/50 rounded-3xl max-w-sm w-full p-5 text-center space-y-4">
+            <div class="flex justify-between items-center border-b border-amberaccent/20 pb-2">
+                <h3 class="font-bold text-amberaccent text-sm"><i class="fa-solid fa-qrcode mr-2"></i>สแกน QR Code แผงค้า</h3>
+                <button onclick="closeQrScanModal()" class="text-kioskcream/60 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="relative w-48 h-48 mx-auto border-2 border-dashed border-amberaccent rounded-2xl flex items-center justify-center overflow-hidden bg-black/50">
+                <div class="absolute inset-x-0 h-1 bg-amberaccent shadow-[0_0_15px_#F59E0B] animate-bounce"></div>
+                <i class="fa-solid fa-camera text-4xl text-amberaccent/40"></i>
+            </div>
+            
+            <p class="text-xs text-kioskcream/70">นำ QR Code หรือ ป้ายประจำแผงค้า มาส่องที่กล้องด้านหน้าตู้</p>
+
+            <div class="text-left space-y-1 bg-darkwoodlight p-3 rounded-xl border border-white/10">
+                <span class="text-[10px] text-amberaccent font-bold">จำลองเลือกสแกนแผงค้า:</span>
+                <select onchange="simulateQrScan(this.value)" class="w-full bg-black/60 border border-amberaccent/30 rounded-lg p-2 text-xs text-kioskcream">
+                    <option value="">-- เลือกแผงค้าเพื่อทดสอบสแกน --</option>
+                    <option value="A01">#A01 - เจ้ณี ทุเรียนหมอนทอง</option>
+                    <option value="B01">#B01 - เฮียเล้ง ผลไม้นำเข้าพรีเมี่ยม</option>
+                    <option value="C01">#C01 - สวนส้มป้าสมบูรณ์</option>
+                    <option value="D01">#D01 - น้ำผลไม้คั้นสดคุณต๋อง</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SOS ACTIVE FULLSCREEN ALERT OVERLAY ================= -->
+    <div id="sos-active-overlay" class="hidden fixed inset-0 z-50 sos-flashing flex flex-col items-center justify-center p-6 text-white text-center">
+        <div class="w-28 h-28 rounded-full bg-white text-red-600 flex items-center justify-center text-6xl shadow-2xl mb-6 animate-ping">
+            <i class="fa-solid fa-bell"></i>
+        </div>
+        
+        <h1 class="text-4xl font-black mb-2 tracking-wide">สัญญาณฉุกเฉินทำงาน!</h1>
+        <p class="text-lg font-bold mb-6 max-w-md text-red-100">
+            ระบบกำลังส่งสัญญาณเตือนภัยไปยังศูนย์รักษาความปลอดภัยตลาดมหานาค
+        </p>
+
+        <button onclick="stopSOSAlarm()" class="bg-white text-red-700 font-black text-2xl px-8 py-5 rounded-3xl shadow-2xl border-4 border-red-900 kiosk-touch-active hover:bg-red-50">
+            <i class="fa-solid fa-power-off mr-2"></i> หยุดสัญญาณ SOS
+        </button>
+    </div>
+
+    <!-- ================= DEVELOPER MODE PIN & CONFIG MODAL ================= -->
+    <div id="dev-pin-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <!-- PIN Pad Modal -->
+        <div id="dev-pin-view" class="bg-darkwood border-2 border-amberaccent rounded-3xl max-w-xs w-full p-5 text-center space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-amberaccent/30 pb-2">
+                <h3 class="font-bold text-amberaccent text-sm"><i class="fa-solid fa-lock mr-2"></i>ผู้ดูแลระบบ (Developer Mode)</h3>
+                <button onclick="closeDevPinModal()" class="text-kioskcream/60 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-kioskcream/70">กรุณาใส่รหัส PIN 10 หลักเพื่อเข้าสู่ระบบ</p>
+
+            <!-- PIN Display Dots -->
+            <input type="password" id="dev-pin-input" readonly maxlength="10" 
+                   class="w-full bg-black/60 border-2 border-amberaccent/50 rounded-xl py-2 text-center text-2xl tracking-[0.4em] font-mono text-amberaccent focus:outline-none">
+
+            <!-- PIN Numpad -->
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="pressPinNum('1')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">1</button>
+                <button onclick="pressPinNum('2')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">2</button>
+                <button onclick="pressPinNum('3')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">3</button>
+                <button onclick="pressPinNum('4')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">4</button>
+                <button onclick="pressPinNum('5')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">5</button>
+                <button onclick="pressPinNum('6')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">6</button>
+                <button onclick="pressPinNum('7')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">7</button>
+                <button onclick="pressPinNum('8')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">8</button>
+                <button onclick="pressPinNum('9')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">9</button>
+                <button onclick="clearPinNum()" class="bg-red-900/60 text-red-300 text-sm font-bold p-3 rounded-xl">ลบ</button>
+                <button onclick="pressPinNum('0')" class="bg-darkwoodlight border border-amberaccent/30 text-white text-xl font-bold p-3 rounded-xl kiosk-touch-active">0</button>
+                <button onclick="submitDevPin()" class="bg-emerald-600 text-white text-sm font-bold p-3 rounded-xl">ตกลง</button>
+            </div>
+            <p id="pin-error-msg" class="text-xs text-red-400 font-bold hidden">รหัส PIN ไม่ถูกต้อง!</p>
+        </div>
+
+        <!-- Developer Config Panel -->
+        <div id="dev-panel-view" class="hidden bg-darkwood border-2 border-amberaccent rounded-3xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-amberaccent/30 pb-3">
+                <h3 class="font-bold text-amberaccent text-base"><i class="fa-solid fa-sliders mr-2"></i>เมนูผู้ดูแลระบบ (Kiosk Config)</h3>
+                <button onclick="closeDevPinModal()" class="text-kioskcream/60 hover:text-white">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Announcement Ticker Edit -->
+            <div class="space-y-1.5 bg-darkwoodlight p-3 rounded-2xl border border-white/10">
+                <label class="text-xs font-bold text-amberaccent">แก้ไขข้อความวิ่งแถบประกาศ:</label>
+                <textarea id="dev-ticker-input" rows="2" class="w-full bg-black/60 border border-amberaccent/30 rounded-xl p-2 text-xs text-kioskcream focus:outline-none"></textarea>
+                <button onclick="saveTickerText()" class="bg-terracotta hover:bg-terracottalight text-white font-bold text-xs px-3 py-1.5 rounded-lg border border-amberaccent/30">
+                    อัปเดตข้อความประกาศ
+                </button>
+            </div>
+
+            <!-- Floorplan Custom Upload (Shrink to fit natural bounds) -->
+            <div class="space-y-2 bg-darkwoodlight p-3 rounded-2xl border border-white/10">
+                <label class="text-xs font-bold text-amberaccent">อัปโหลดภาพผังตลาดใหม่ (Custom Floorplan Image):</label>
+                <input type="file" id="dev-map-upload" accept="image/*" onchange="handleCustomFloorplanUpload(event)" 
+                       class="w-full text-xs text-kioskcream file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-terracotta file:text-white file:font-bold">
+                <p class="text-[10px] text-kioskcream/60">ระบบจะปรับขนาดภาพให้พอดีหน้าจอ Kiosk ด้วย `fitBounds` และ `setMaxBounds` ตามขนาดจริงของรูปภาพ (`naturalWidth` x `naturalHeight`)</p>
+            </div>
+
+            <!-- Drag Marker Switch & Coordinate Exporter -->
+            <div class="space-y-2 bg-darkwoodlight p-3 rounded-2xl border border-white/10">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-amberaccent">โหมดขยับพิกัดแผงค้า (Drag Markers):</span>
+                    <button id="toggle-drag-btn" onclick="toggleMarkerDragging()" class="bg-gray-700 text-white text-xs px-3 py-1 rounded-lg font-bold">
+                        ปิดใช้งาน
+                    </button>
+                </div>
+                <button onclick="exportStallCoordinates()" class="w-full bg-amberdark hover:bg-amberaccent text-white font-bold text-xs py-2 rounded-xl border border-amberaccent/40">
+                    <i class="fa-solid fa-download mr-1"></i> ส่งออกพิกัดร้านค้า (Export Coordinates JSON)
+                </button>
+            </div>
+
+            <div class="text-right pt-2 border-t border-white/10">
+                <button onclick="closeDevPinModal()" class="bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl">
+                    ปิดหน้าต่างนี้
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        // GLOBAL STATE & DATA DEFINITIONS
+        const STALLS_DATA = [];
+        let leafletMap = null;
+        let leafletMarkers = [];
+        let currentFloorplanOverlay = null;
+        let isMarkerDragEnabled = false;
+        let currentTab = 'home';
+        let currentCategoryFilter = 'ALL';
+        let vkLanguage = 'TH'; // 'TH' or 'EN'
+        let audioCtx = null;
+        let sosOscillator1 = null;
+        let sosOscillator2 = null;
+        let sosInterval = null;
+
+        // Thai & English Keyboard Layouts
+        const KB_TH = [
+            ['1','2','3','4','5','6','7','8','9','0'],
+            ['ภ','ถ','ุ','ึ','ค','ต','จ','ข','ช','ล'],
+            ['ก','ด','เ','้','า','่','ร','น','ย','บ'],
+            ['ผ','ป','แ','อ','ิ','ื','ท','ม','ใ','ฝ'],
+            ['SPACE', 'BACKSPACE']
+        ];
+
+        const KB_EN = [
+            ['1','2','3','4','5','6','7','8','9','0'],
+            ['Q','W','E','R','T','Y','U','I','O','P'],
+            ['A','S','D','F','G','H','J','K','L'],
+            ['Z','X','C','V','B','N','M'],
+            ['SPACE', 'BACKSPACE']
+        ];
+
+        // Generate 35 Rich Stalls Data (Zone A, B, C, D)
+        function initStallsData() {
+            const fruitTypes = [
+                { cat: 'ผลไม้ไทย', name: 'ทุเรียนหมอนทองระยอง', photo: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=500&auto=format&fit=crop' },
+                { cat: 'ผลไม้ไทย', name: 'มะม่วงน้ำดอกไม้ทอง', photo: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=500&auto=format&fit=crop' },
+                { cat: 'ผลไม้นำเข้า', name: 'แอปเปิ้ลฟูจิญี่ปุ่น', photo: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=500&auto=format&fit=crop' },
+                { cat: 'ผลไม้นำเข้า', name: 'องุ่นไชน์มัสแคท', photo: 'https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=500&auto=format&fit=crop' },
+                { cat: 'ตระกูลส้ม', name: 'ส้มสายน้ำผึ้งฝาง', photo: 'https://images.unsplash.com/photo-1547514701-42782101795e?w=500&auto=format&fit=crop' },
+                { cat: 'แปรรูป/น้ำสด', name: 'น้ำส้มคั้นสด 100%', photo: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500&auto=format&fit=crop' },
+                { cat: 'ผลไม้ไทย', name: 'มังคุดเกรดส่งออก', photo: 'https://images.unsplash.com/photo-1546548970-71785318a17b?w=500&auto=format&fit=crop' }
+            ];
+
+            const zones = ['A', 'B', 'C', 'D'];
+            let count = 1;
+
+            zones.forEach(zone => {
+                let limit = (zone === 'A' || zone === 'B') ? 10 : 7.5;
+                for (let i = 1; i <= limit; i++) {
+                    const stallNum = i < 10 ? `0${i}` : `${i}`;
+                    const stallId = `#${zone}${stallNum}`; // Format e.g. #A01 without raw "ZONE"
+                    const fruitObj = fruitTypes[(count - 1) % fruitTypes.length];
+                    
+                    let zoneCategory = 'ผลไม้ไทย';
+                    if (zone === 'B') zoneCategory = 'ผลไม้นำเข้า';
+                    if (zone === 'C') zoneCategory = 'ตระกูลส้ม';
+                    if (zone === 'D') zoneCategory = 'แปรรูป/น้ำสด';
+
+                    // Generate map lat/lng coordinates across market grid
+                    let baseLat = 13.7550 + (zone === 'A' ? 0.0010 : zone === 'B' ? 0.0005 : zone === 'C' ? -0.0005 : -0.0010);
+                    let baseLng = 100.5120 + (i * 0.00025);
+
+                    STALLS_DATA.push({
+                        id: stallId,
+                        zone: zone,
+                        name: `แผง ${fruitObj.name.split(' ')[0]} ${zone}${stallNum}`,
+                        category: zoneCategory,
+                        phone: `08${Math.floor(10000000 + Math.random() * 9000000)}`,
+                        photo: fruitObj.photo,
+                        coords: [baseLat, baseLng],
+                        items: [
+                            { name: fruitObj.name, price: `${120 + (i * 10)} บาท/กก.` },
+                            { name: 'สินค้าเกรดคัดพิเศษ (ลัง)', price: `${800 + (i * 50)} บาท/ลัง` }
+                        ]
+                    });
+                    count++;
+                }
+            });
+        }
+
+        window.onload = function() {
+            initStallsData();
+            startDigitalClock();
+            renderHomeFeaturedStalls();
+            renderDirectoryStalls();
+            initLeafletMap();
+            buildVirtualKeyboard();
+        };
+
+        // Live Digital Clock
+        function startDigitalClock() {
+            const updateClock = () => {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('kiosk-clock').textContent = `${hours}:${minutes}:${seconds}`;
+            };
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Hide all tabs
+            document.querySelectorAll('.tab-page').forEach(page => page.classList.add('hidden'));
+            
+            // Show target tab
+            const target = document.getElementById(`tab-${tabName}`);
+            if (target) target.classList.remove('hidden');
+
+            // Update Nav Buttons active state
+            document.querySelectorAll('.kiosk-nav-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-terracotta', 'text-white');
+                btn.classList.add('bg-darkwoodlight', 'text-kioskcream/70');
+            });
+
+            const activeBtn = document.getElementById(`nav-btn-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'bg-terracotta', 'text-white');
+                activeBtn.classList.remove('bg-darkwoodlight', 'text-kioskcream/70');
+            }
+
+            // Invalidate Leaflet Map size when tab becomes visible
+            if (tabName === 'map' && leafletMap) {
+                setTimeout(() => {
+                    leafletMap.invalidateSize();
+                }, 200);
+            }
+        }
+
+        function renderHomeFeaturedStalls(filterCat = 'ALL') {
+            const grid = document.getElementById('home-featured-grid');
+            grid.innerHTML = '';
+
+            let filtered = STALLS_DATA;
+            if (filterCat !== 'ALL') {
+                filtered = STALLS_DATA.filter(s => s.category === filterCat);
+            }
+
+            filtered.slice(0, 10).forEach(stall => {
+                const card = document.createElement('div');
+                card.className = "bg-darkwoodlight border border-amberaccent/20 rounded-2xl p-2.5 flex flex-col justify-between hover:border-amberaccent shadow-md kiosk-touch-active cursor-pointer";
+                card.onclick = () => openShopModal(stall.id);
+
+                card.innerHTML = `
+                    <div>
+                        <div class="relative h-28 w-full rounded-xl overflow-hidden mb-2">
+                            <img src="${stall.photo}" alt="${stall.name}" class="w-full h-full object-cover">
+                            <span class="absolute top-1.5 left-1.5 bg-terracotta text-white font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-amberaccent/40 shadow">
+                                ${stall.id}
+                            </span>
+                        </div>
+                        <h4 class="font-bold text-xs text-kioskcream leading-tight line-clamp-1">${stall.name}</h4>
+                        <p class="text-[10px] text-amberaccent mt-0.5">${stall.category}</p>
+                    </div>
+                    <div class="mt-2 pt-1.5 border-t border-white/10 flex justify-between items-center text-[10px]">
+                        <span class="text-kioskcream/70"><i class="fa-solid fa-phone mr-1"></i>${stall.phone}</span>
+                        <span class="text-amberaccent font-bold"><i class="fa-solid fa-angle-right"></i></span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterCategory(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-chip').forEach(chip => {
+                chip.classList.remove('bg-terracotta', 'text-white');
+                chip.classList.add('bg-darkwoodlight', 'text-kioskcream/90');
+            });
+            event.currentTarget.classList.add('bg-terracotta', 'text-white');
+            renderHomeFeaturedStalls(cat);
+        }
+
+        function renderDirectoryStalls(stalls = STALLS_DATA) {
+            const container = document.getElementById('directory-stalls-list');
+            container.innerHTML = '';
+
+            document.getElementById('directory-count-badge').textContent = `${stalls.length} รายการ`;
+
+            stalls.forEach(stall => {
+                const item = document.createElement('div');
+                item.className = "bg-darkwoodlight border border-amberaccent/20 rounded-2xl p-3 flex items-center justify-between hover:border-amberaccent kiosk-touch-active cursor-pointer";
+                item.onclick = () => openShopModal(stall.id);
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${stall.photo}" class="w-16 h-16 rounded-xl object-cover border border-amberaccent/30 flex-none">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="bg-terracotta text-white font-bold text-[10px] px-2 py-0.5 rounded-md">${stall.id}</span>
+                                <span class="text-xs text-amberaccent font-medium">${stall.category}</span>
+                            </div>
+                            <h4 class="font-bold text-sm text-kioskcream mt-0.5">${stall.name}</h4>
+                            <p class="text-xs text-kioskcream/70"><i class="fa-solid fa-phone mr-1 text-emerald-400"></i>${stall.phone}</p>
+                        </div>
+                    </div>
+                    <div class="text-right flex-none">
+                        <span class="bg-amberaccent/20 text-amberaccent font-bold text-xs px-3 py-1.5 rounded-xl border border-amberaccent/30 inline-block">
+                            ดูรายละเอียด
+                        </span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function handleDirectorySearch(query) {
+            const q = query.toLowerCase();
+            const filtered = STALLS_DATA.filter(s => 
+                s.name.toLowerCase().includes(q) || 
+                s.id.toLowerCase().includes(q) ||
+                s.category.toLowerCase().includes(q)
+            );
+            renderDirectoryStalls(filtered);
+        }
+
+        function handleDirectoryZoneFilter(zone) {
+            if (zone === 'ALL') {
+                renderDirectoryStalls(STALLS_DATA);
+            } else {
+                const filtered = STALLS_DATA.filter(s => s.zone === zone);
+                renderDirectoryStalls(filtered);
+            }
+        }
+
+        function initLeafletMap() {
+            // Market center coords
+            leafletMap = L.map('leaflet-map-container', {
+                center: [13.7550, 100.5125],
+                zoom: 18,
+                zoomControl: false,
+                attributionControl: false
+            });
+
+            // Dark Map Style Tiles
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 20
+            }).addTo(leafletMap);
+
+            // Add Custom Touch Zoom Controls positioned on right
+            L.control.zoom({ position: 'bottomright' }).addTo(leafletMap);
+
+            // Plot all 35 Stalls as Pins on Leaflet Map
+            STALLS_DATA.forEach(stall => {
+                let badgeColor = '#A83E0E';
+                if (stall.zone === 'B') badgeColor = '#DC2626';
+                if (stall.zone === 'C') badgeColor = '#D97706';
+                if (stall.zone === 'D') badgeColor = '#9333EA';
+
+                const customIcon = L.divIcon({
+                    className: 'custom-leaflet-pin',
+                    html: `<div class="stall-marker-pin" style="background:${badgeColor}; width:38px; height:38px;">${stall.id.replace('#','')}</div>`,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 19]
+                });
+
+                const marker = L.marker(stall.coords, {
+                    icon: customIcon,
+                    draggable: isMarkerDragEnabled
+                }).addTo(leafletMap);
+
+                marker.on('click', () => {
+                    openShopModal(stall.id);
+                });
+
+                leafletMarkers.push({ id: stall.id, marker: marker });
+            });
+        }
+
+        function zoomToZone(zone) {
+            if (!leafletMap) return;
+            if (zone === 'ALL') {
+                leafletMap.setView([13.7550, 100.5125], 18);
+            } else {
+                const zoneStalls = STALLS_DATA.filter(s => s.zone === zone);
+                if (zoneStalls.length > 0) {
+                    const group = L.featureGroup(leafletMarkers.filter(m => m.id.startsWith(`#${zone}`)).map(m => m.marker));
+                    leafletMap.fitBounds(group.getBounds().pad(0.2));
+                }
+            }
+        }
+
+        function openShopModal(stallId) {
+            const stall = STALLS_DATA.find(s => s.id === stallId);
+            if (!stall) return;
+
+            document.getElementById('modal-stall-id').textContent = stall.id; // Clean format e.g. #A01
+            document.getElementById('modal-shop-name').textContent = stall.name;
+            document.getElementById('modal-category').textContent = `หมวดหมู่: ${stall.category}`;
+            document.getElementById('modal-shop-img').src = stall.photo;
+            document.getElementById('modal-phone').textContent = stall.phone;
+            document.getElementById('modal-call-link').href = `tel:${stall.phone}`;
+
+            // Populate Price List
+            const priceContainer = document.getElementById('modal-price-list');
+            priceContainer.innerHTML = '';
+            stall.items.forEach(item => {
+                const row = document.createElement('div');
+                row.className = "flex justify-between items-center bg-black/40 p-2.5 rounded-xl text-xs border border-white/5";
+                row.innerHTML = `
+                    <span class="text-kioskcream font-medium"><i class="fa-solid fa-basket-shopping text-amberaccent mr-2"></i>${item.name}</span>
+                    <span class="text-amberaccent font-bold">${item.price}</span>
+                `;
+                priceContainer.appendChild(row);
+            });
+
+            // Generate Location QR Code image using dynamic API
+            const qrData = encodeURIComponent(`https://mahanakmarket.go.th/stall?id=${stall.id}&lat=${stall.coords[0]}&lng=${stall.coords[1]}`);
+            document.getElementById('modal-qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrData}`;
+
+            document.getElementById('shop-modal').classList.remove('hidden');
+        }
+
+        function closeShopModal() {
+            document.getElementById('shop-modal').classList.add('hidden');
+        }
+
+        function toggleVirtualKeyboard(show) {
+            const kb = document.getElementById('virtual-keyboard-overlay');
+            if (show) {
+                kb.classList.remove('hidden');
+            } else {
+                kb.classList.add('hidden');
+            }
+        }
+
+        function buildVirtualKeyboard() {
+            const container = document.getElementById('vk-keys-container');
+            container.innerHTML = '';
+            
+            const layout = vkLanguage === 'TH' ? KB_TH : KB_EN;
+
+            layout.forEach(row => {
+                row.forEach(key => {
+                    const btn = document.createElement('button');
+                    
+                    if (key === 'SPACE') {
+                        btn.className = "col-span-6 bg-darkwoodlight border border-amberaccent/30 text-kioskcream p-3 rounded-xl text-xs font-bold kiosk-touch-active";
+                        btn.textContent = "SPACE (เว้นวรรค)";
+                        btn.onclick = () => pressVkKey(' ');
+                    } else if (key === 'BACKSPACE') {
+                        btn.className = "col-span-4 bg-red-900/60 border border-red-500/30 text-white p-3 rounded-xl text-xs font-bold kiosk-touch-active";
+                        btn.innerHTML = '<i class="fa-solid fa-delete-left mr-1"></i> ลบ';
+                        btn.onclick = () => pressVkKey('BACKSPACE');
+                    } else {
+                        btn.className = "bg-darkwoodlight border border-amberaccent/20 text-kioskcream p-2.5 rounded-xl text-base font-bold hover:border-amberaccent kiosk-touch-active";
+                        btn.textContent = key;
+                        btn.onclick = () => pressVkKey(key);
+                    }
+                    container.appendChild(btn);
+                });
+            });
+        }
+
+        function switchKeyboardLang() {
+            vkLanguage = vkLanguage === 'TH' ? 'EN' : 'TH';
+            document.getElementById('kb-lang-btn').textContent = `ภาษา: ${vkLanguage}`;
+            buildVirtualKeyboard();
+        }
+
+        function pressVkKey(key) {
+            const input = document.getElementById('kiosk-search-input');
+            const clearBtn = document.getElementById('clear-search-btn');
+
+            if (key === 'BACKSPACE') {
+                input.value = input.value.slice(0, -1);
+            } else {
+                input.value += key;
+            }
+
+            if (input.value.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            // Live filter on home
+            renderHomeFeaturedStallsBySearch(input.value);
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('kiosk-search-input');
+            input.value = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            renderHomeFeaturedStalls('ALL');
+        }
+
+        function renderHomeFeaturedStallsBySearch(query) {
+            if (!query) {
+                renderHomeFeaturedStalls(currentCategoryFilter);
+                return;
+            }
+            const q = query.toLowerCase();
+            const filtered = STALLS_DATA.filter(s => 
+                s.name.toLowerCase().includes(q) || 
+                s.id.toLowerCase().includes(q) ||
+                s.category.toLowerCase().includes(q)
+            );
+            renderHomeFeaturedStallsWithArray(filtered);
+        }
+
+        function renderHomeFeaturedStallsWithArray(arr) {
+            const grid = document.getElementById('home-featured-grid');
+            grid.innerHTML = '';
+            arr.slice(0, 10).forEach(stall => {
+                const card = document.createElement('div');
+                card.className = "bg-darkwoodlight border border-amberaccent/20 rounded-2xl p-2.5 flex flex-col justify-between hover:border-amberaccent shadow-md kiosk-touch-active cursor-pointer";
+                card.onclick = () => openShopModal(stall.id);
+                card.innerHTML = `
+                    <div>
+                        <div class="relative h-28 w-full rounded-xl overflow-hidden mb-2">
+                            <img src="${stall.photo}" alt="${stall.name}" class="w-full h-full object-cover">
+                            <span class="absolute top-1.5 left-1.5 bg-terracotta text-white font-extrabold text-[10px] px-2 py-0.5 rounded-md border border-amberaccent/40 shadow">
+                                ${stall.id}
+                            </span>
+                        </div>
+                        <h4 class="font-bold text-xs text-kioskcream leading-tight line-clamp-1">${stall.name}</h4>
+                        <p class="text-[10px] text-amberaccent mt-0.5">${stall.category}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function confirmTriggerSOS() {
+            if (confirm("คุณต้องการส่งสัญญาณเตือน SOS ฉุกเฉินทันทีใช่หรือไม่?")) {
+                startSOSAlarm();
+            }
+        }
+
+        function startSOSAlarm() {
+            document.getElementById('sos-active-overlay').classList.remove('hidden');
+
+            // Web Audio API Dual Pitch Oscillator setup (700Hz / 950Hz oscillation)
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+
+                sosOscillator1 = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                sosOscillator1.type = 'sawtooth';
+                sosOscillator1.frequency.setValueAtTime(700, audioCtx.currentTime);
+
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+
+                sosOscillator1.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                sosOscillator1.start();
+
+                // Alternating frequencies between 700Hz and 950Hz
+                let highPitch = false;
+                sosInterval = setInterval(() => {
+                    if (sosOscillator1 && audioCtx) {
+                        sosOscillator1.frequency.setValueAtTime(highPitch ? 700 : 950, audioCtx.currentTime);
+                        highPitch = !highPitch;
+                    }
+                }, 250);
+
+            } catch (e) {
+                console.warn("Web Audio API not supported or blocked", e);
+            }
+        }
+
+        function stopSOSAlarm() {
+            document.getElementById('sos-active-overlay').classList.add('hidden');
+
+            if (sosOscillator1) {
+                try { sosOscillator1.stop(); } catch(e){}
+                sosOscillator1 = null;
+            }
+            if (sosInterval) {
+                clearInterval(sosInterval);
+                sosInterval = null;
+            }
+            if (audioCtx) {
+                try { audioCtx.close(); } catch(e){}
+                audioCtx = null;
+            }
+        }
+
+        function openDevPinModal() {
+            document.getElementById('dev-pin-modal').classList.remove('hidden');
+            document.getElementById('dev-pin-view').classList.remove('hidden');
+            document.getElementById('dev-panel-view').classList.add('hidden');
+            clearPinNum();
+        }
+
+        function closeDevPinModal() {
+            document.getElementById('dev-pin-modal').classList.add('hidden');
+        }
+
+        function pressPinNum(num) {
+            const pinInput = document.getElementById('dev-pin-input');
+            if (pinInput.value.length < 10) {
+                pinInput.value += num;
+            }
+        }
+
+        function clearPinNum() {
+            document.getElementById('dev-pin-input').value = '';
+            document.getElementById('pin-error-msg').classList.add('hidden');
+        }
+
+        function submitDevPin() {
+            const pin = document.getElementById('dev-pin-input').value;
+            // Required PIN: 1212312121
+            if (pin === '1212312121') {
+                document.getElementById('dev-pin-view').classList.add('hidden');
+                document.getElementById('dev-panel-view').classList.remove('hidden');
+                document.getElementById('dev-ticker-input').value = document.getElementById('announcement-ticker').textContent.trim();
+            } else {
+                document.getElementById('pin-error-msg').classList.remove('hidden');
+            }
+        }
+
+        function saveTickerText() {
+            const newText = document.getElementById('dev-ticker-input').value;
+            if (newText) {
+                document.getElementById('announcement-ticker').textContent = newText;
+                alert('อัปเดตข้อความวิ่งประกาศเรียบร้อยแล้ว!');
+            }
+        }
+
+        function handleCustomFloorplanUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const naturalW = img.naturalWidth;
+                    const naturalH = img.naturalHeight;
+
+                    // Compute Leaflet Image Overlay Bounds based on Natural dimensions
+                    const bounds = [[13.7500, 100.5100], [13.7500 + (naturalH * 0.000005), 100.5100 + (naturalW * 0.000005)]];
+
+                    if (currentFloorplanOverlay) {
+                        leafletMap.removeLayer(currentFloorplanOverlay);
+                    }
+
+                    currentFloorplanOverlay = L.imageOverlay(e.target.result, bounds).addTo(leafletMap);
+                    
+                    // Fit map bounds smoothly to image width/height
+                    leafletMap.fitBounds(bounds);
+                    leafletMap.setMaxBounds(bounds);
+
+                    alert(`อัปโหลดและปรับขนาดผังตลาดเรียบร้อยแล้ว! (${naturalW}x${naturalH}px)`);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function toggleMarkerDragging() {
+            isMarkerDragEnabled = !isMarkerDragEnabled;
+            const btn = document.getElementById('toggle-drag-btn');
+            
+            if (isMarkerDragEnabled) {
+                btn.textContent = 'เปิดใช้งานอยู่';
+                btn.className = 'bg-emerald-600 text-white text-xs px-3 py-1 rounded-lg font-bold';
+            } else {
+                btn.textContent = 'ปิดใช้งาน';
+                btn.className = 'bg-gray-700 text-white text-xs px-3 py-1 rounded-lg font-bold';
+            }
+
+            leafletMarkers.forEach(m => {
+                if (m.marker.dragging) {
+                    isMarkerDragEnabled ? m.marker.dragging.enable() : m.marker.dragging.disable();
+                }
+            });
+        }
+
+        function exportStallCoordinates() {
+            const exportData = leafletMarkers.map(m => {
+                const pos = m.marker.getLatLng();
+                return {
+                    id: m.id,
+                    lat: pos.lat.toFixed(6),
+                    lng: pos.lng.toFixed(6)
+                };
+            });
+
+            const jsonStr = JSON.stringify(exportData, null, 2);
+            navigator.clipboard.writeText(jsonStr);
+            alert('คัดลอก JSON พิกัดร้านค้าทั้งหมดไปยัง Clipboard เรียบร้อยแล้ว!\n\n' + jsonStr.slice(0, 150) + '...');
+        }
+
+        // QR Scanner Simulation Modal Handlers
+        function openQrScanModal() {
+            document.getElementById('qr-scan-modal').classList.remove('hidden');
+        }
+
+        function closeQrScanModal() {
+            document.getElementById('qr-scan-modal').classList.add('hidden');
+        }
+
+        function simulateQrScan(stallId) {
+            if (!stallId) return;
+            closeQrScanModal();
+            openShopModal(`#${stallId}`);
+        }
+    </script>
+</body>
+</html>
