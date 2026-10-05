@@ -1,1 +1,1577 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mahanak Market App - ตลาดมหานาค</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkwood: '#2E1A0C',
+                        terracotta: '#A83E0E',
+                        cream: '#FDFBF7',
+                        creamdand: '#F5EFE6',
+                        warmgray: '#E6DFD5',
+                        woodaccent: '#422817'
+                    },
+                    fontFamily: {
+                        kanit: ['Kanit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
 
+    <!-- Google Fonts: Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+    <!-- Leaflet.js CSS & JavaScript -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #121212;
+            color: #2E1A0C;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #FDFBF7;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #A83E0E;
+            border-radius: 4px;
+        }
+
+        /* Phone Frame Glow & Shadows */
+        .phone-shell {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(168, 62, 14, 0.25);
+        }
+
+        /* Marquee Animation */
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 18s linear infinite;
+        }
+
+        /* SOS Flashing Overlay Animation */
+        @keyframes sosFlash {
+            0%, 100% { background-color: rgba(220, 38, 38, 0.95); }
+            50% { background-color: rgba(127, 29, 29, 0.95); }
+        }
+        .sos-active {
+            animation: sosFlash 0.5s infinite;
+        }
+
+        /* Pulse Ring for SOS Icon */
+        @keyframes ringPulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .animate-ring {
+            animation: ringPulse 1s infinite ease-in-out;
+        }
+
+        /* Leaflet Map Custom Marker Style */
+        .stall-marker {
+            background: #A83E0E;
+            color: #FDFBF7;
+            border: 2px solid #2E1A0C;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 11px;
+            text-align: center;
+            padding: 2px 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            white-space: nowrap;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .stall-marker:hover, .stall-marker.active-pin {
+            background: #2E1A0C;
+            color: #FDFBF7;
+            border-color: #A83E0E;
+            transform: scale(1.15);
+            z-index: 1000 !important;
+        }
+
+        /* Leaflet Controls Custom Placement */
+        .leaflet-top.leaflet-left {
+            top: 10px;
+            left: 10px;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-0 md:p-4">
+
+    <!-- Smartphone Shell Wrapper -->
+    <div class="phone-shell relative w-full max-w-md h-[100dvh] md:h-[880px] bg-darkwood text-cream md:rounded-[48px] overflow-hidden flex flex-col border-0 md:border-[10px] border-darkwood border-opacity-90">
+
+        <!-- Top Phone Status Bar & Notch -->
+        <div class="bg-darkwood text-cream text-xs px-6 pt-3 pb-1 flex justify-between items-center z-30 select-none shrink-0">
+            <span id="currentTime" class="font-semibold tracking-wider">10:42</span>
+            <!-- Dynamic Island Notch -->
+            <div class="w-24 h-4 bg-black rounded-full flex items-center justify-center space-x-1 shadow-inner">
+                <div class="w-2 h-2 rounded-full bg-terracotta animate-pulse"></div>
+                <div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+            </div>
+            <div class="flex items-center space-x-1.5 opacity-80">
+                <i class="fa-solid fa-signal text-[10px]"></i>
+                <i class="fa-solid fa-wifi text-[10px]"></i>
+                <i class="fa-solid fa-battery-full text-[11px]"></i>
+            </div>
+        </div>
+
+        <!-- App Top Header -->
+        <header class="bg-darkwood text-cream px-4 py-2.5 flex items-center justify-between border-b border-woodaccent z-30 shrink-0">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-full bg-terracotta flex items-center justify-center text-cream shadow-md border border-amber-600">
+                    <i class="fa-solid fa-basket-shopping text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base tracking-wide leading-none text-cream">ตลาดมหานาค</h1>
+                    <p class="text-[10px] text-amber-200 opacity-90 leading-tight">ศูนย์รวมผลไม้ขายส่ง-ขายปลีกใหญ่ที่สุด</p>
+                </div>
+            </div>
+            <button onclick="openDevPinModal()" class="px-2.5 py-1 bg-woodaccent hover:bg-terracotta text-amber-200 hover:text-white rounded-lg text-xs font-medium border border-amber-800/40 transition flex items-center space-x-1 shadow-sm" title="โหมดผู้ดูแลระบบ">
+                <i class="fa-solid fa-code text-[11px]"></i>
+                <span class="text-[11px]">โหมดผู้พัฒนา</span>
+            </button>
+        </header>
+
+        <!-- Marquee Broadcast Banner -->
+        <div class="bg-terracotta text-cream text-xs py-1.5 px-3 overflow-hidden flex items-center space-x-2 border-b border-red-950 shadow-inner z-20 shrink-0">
+            <i class="fa-solid fa-bullhorn text-amber-200 text-xs shrink-0 animate-bounce"></i>
+            <div class="overflow-hidden w-full relative">
+                <div id="marqueeText" class="animate-marquee font-normal text-[11.5px] tracking-wide">
+                    ยินดีต้อนรับสู่ตลาดมหานาค! ตลาดผลไม้คุณภาพ เปิดบริการ 24 ชั่วโมง สด ใหม่ ราคาย่อมเยาทุกวัน
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Scrollable Screen Content Container -->
+        <main class="flex-1 relative overflow-hidden bg-cream text-darkwood">
+
+            <!-- TAB 1: HOME VIEW -->
+            <section id="tab-home" class="tab-content absolute inset-0 overflow-y-auto p-4 space-y-4">
+                <!-- Search & Quick Filter Bar -->
+                <div class="sticky top-0 bg-cream/95 backdrop-blur-md pt-1 pb-3 z-10 space-y-2">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-terracotta text-sm"></i>
+                        <input type="text" id="homeSearchInput" onkeyup="handleHomeSearch(this.value)" placeholder="ค้นหาชื่อผลไม้, แผงค้า หรือชื่อร้าน..." class="w-full pl-10 pr-9 py-2.5 bg-creamdand border border-amber-900/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-terracotta placeholder-amber-900/50 shadow-sm transition">
+                        <button onclick="clearSearch()" id="clearSearchBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-amber-900/60 hover:text-terracotta">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </div>
+
+                    <!-- Category Quick Filter Pills -->
+                    <div class="flex space-x-2 overflow-x-auto no-scrollbar py-1 text-xs">
+                        <button onclick="filterCategory('ALL')" class="cat-btn active shrink-0 px-3 py-1.5 rounded-lg bg-terracotta text-cream font-medium shadow-sm border border-terracotta">ทั้งหมด</button>
+                        <button onclick="filterCategory('ทุเรียน')" class="cat-btn shrink-0 px-3 py-1.5 rounded-lg bg-creamdand hover:bg-amber-100 text-darkwood font-medium border border-amber-900/15">ราชาผลไม้ (ทุเรียน)</button>
+                        <button onclick="filterCategory('มะม่วง')" class="cat-btn shrink-0 px-3 py-1.5 rounded-lg bg-creamdand hover:bg-amber-100 text-darkwood font-medium border border-amber-900/15">มะม่วงสด</button>
+                        <button onclick="filterCategory('ผลไม้นำเข้า')" class="cat-btn shrink-0 px-3 py-1.5 rounded-lg bg-creamdand hover:bg-amber-100 text-darkwood font-medium border border-amber-900/15">นำเข้าพรีเมี่ยม</button>
+                        <button onclick="filterCategory('ผลไม้ตามฤดูกาล')" class="cat-btn shrink-0 px-3 py-1.5 rounded-lg bg-creamdand hover:bg-amber-100 text-darkwood font-medium border border-amber-900/15">ตามฤดูกาล</button>
+                        <button onclick="filterCategory('ผลไม้อบแห้ง')" class="cat-btn shrink-0 px-3 py-1.5 rounded-lg bg-creamdand hover:bg-amber-100 text-darkwood font-medium border border-amber-900/15">อบแห้ง & แช่อิ่ม</button>
+                    </div>
+                </div>
+
+                <!-- Market Banner Slider Card -->
+                <div class="bg-gradient-to-r from-darkwood to-woodaccent rounded-2xl p-4 text-cream shadow-lg relative overflow-hidden border border-amber-900/30">
+                    <div class="absolute -right-4 -bottom-6 opacity-20 text-cream text-8xl">
+                        <i class="fa-solid fa-lemon"></i>
+                    </div>
+                    <span class="bg-terracotta text-cream text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider uppercase inline-block mb-1">ข่าวประชาสัมพันธ์</span>
+                    <h3 class="text-lg font-bold text-amber-200">เทศกาลผลไม้ไทยส่งออก 2026</h3>
+                    <p class="text-xs text-cream/90 mt-1 max-w-[230px]">พบกับทุเรียนหมอนทองระยอง มังคุดนครศรี และส้มสายน้ำผึ้งสดจากสวน ลดพิเศษกว่า 35 แผงค้า</p>
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="text-[11px] text-amber-300 font-medium"><i class="fa-regular fa-clock mr-1"></i>เปิดตลอด 24 ชั่วโมง</span>
+                        <button onclick="switchTab('stalls')" class="px-3 py-1 bg-terracotta hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-md transition">ดูแผงค้าทั้งหมด</button>
+                    </div>
+                </div>
+
+                <!-- Stats Summary Pills -->
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-creamdand p-2.5 rounded-xl border border-amber-900/10 shadow-sm">
+                        <p class="text-lg font-bold text-terracotta">35</p>
+                        <p class="text-[11px] text-darkwood/80 font-medium">แผงค้าคุณภาพ</p>
+                    </div>
+                    <div class="bg-creamdand p-2.5 rounded-xl border border-amber-900/10 shadow-sm">
+                        <p class="text-lg font-bold text-amber-800">24 ชม.</p>
+                        <p class="text-[11px] text-darkwood/80 font-medium">เวลาทำการ</p>
+                    </div>
+                    <div class="bg-creamdand p-2.5 rounded-xl border border-amber-900/10 shadow-sm">
+                        <p class="text-lg font-bold text-emerald-700">100%</p>
+                        <p class="text-[11px] text-darkwood/80 font-medium">ผลไม้สดตรงสวน</p>
+                    </div>
+                </div>
+
+                <!-- Featured Stalls Section -->
+                <div>
+                    <div class="flex justify-between items-center mb-2.5">
+                        <h2 class="font-bold text-darkwood text-base flex items-center">
+                            <i class="fa-solid fa-fire text-terracotta mr-2"></i>ร้านค้าแนะนำยอดนิยม
+                        </h2>
+                        <button onclick="switchTab('stalls')" class="text-xs font-semibold text-terracotta hover:underline">ดูทั้งหมด (35)</button>
+                    </div>
+                    <div id="featuredStallsGrid" class="grid grid-cols-2 gap-3">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: STALLS LIST VIEW -->
+            <section id="tab-stalls" class="tab-content absolute inset-0 overflow-y-auto p-4 hidden space-y-3">
+                <div class="flex justify-between items-center mb-1">
+                    <div>
+                        <h2 class="text-lg font-bold text-darkwood">รายชื่อแผงค้าทั้งหมด (35 ร้าน)</h2>
+                        <p class="text-xs text-darkwood/70">คลิกที่ร้านเพื่อดูรายการสินค้าและเบอร์ติดต่อ direct dial</p>
+                    </div>
+                </div>
+
+                <!-- Secondary Search inside Stalls Tab -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-terracotta text-sm"></i>
+                    <input type="text" id="stallListSearch" onkeyup="filterStallsList(this.value)" placeholder="ค้นหาแผงค้า หรือประเภทผลไม้..." class="w-full pl-9 pr-3 py-2 bg-creamdand border border-amber-900/20 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-terracotta">
+                </div>
+
+                <!-- Stalls List Grid -->
+                <div id="fullStallsList" class="space-y-2.5 pb-8">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </section>
+
+            <!-- TAB 3: MAP VIEW -->
+            <section id="tab-map" class="tab-content absolute inset-0 hidden flex flex-col">
+                <!-- Map Header Overlay Control -->
+                <div class="bg-darkwood text-cream px-3 py-2 flex justify-between items-center z-10 border-b border-woodaccent">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-map-location-dot text-terracotta text-base"></i>
+                        <span class="text-xs font-bold tracking-wide">แผนผังตลาดมหานาค (Interactive Floor Map)</span>
+                    </div>
+                    <span class="text-[10px] bg-terracotta px-2 py-0.5 rounded text-cream font-medium">L.CRS.Simple</span>
+                </div>
+
+                <!-- Leaflet Map Container -->
+                <div class="relative flex-1 w-full bg-stone-900">
+                    <div id="leafletMap" class="w-full h-full"></div>
+
+                    <!-- Lower Positioned Scan QR Stall Button (top-16 right-3) -->
+                    <button onclick="openQRScannerSim()" class="absolute top-16 right-3 z-[400] bg-darkwood text-amber-200 hover:bg-terracotta hover:text-white px-3 py-2 rounded-xl shadow-lg border border-amber-700/50 text-xs font-semibold flex items-center space-x-1.5 active:scale-95 transition">
+                        <i class="fa-solid fa-qrcode text-terracotta"></i>
+                        <span>สแกน QR แผง</span>
+                    </button>
+
+                    <!-- Bottom Map Helper Floating Bar -->
+                    <div class="absolute bottom-3 left-3 right-3 z-[400] bg-darkwood/95 backdrop-blur-md text-cream p-2.5 rounded-xl border border-woodaccent shadow-xl flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                            <span class="text-[11px] text-amber-100">แตะหมุดเพื่อดูข้อมูลร้านค้า</span>
+                        </div>
+                        <button onclick="resetMapView()" class="px-2 py-1 bg-woodaccent hover:bg-terracotta rounded text-[11px] text-amber-200 font-medium transition">
+                            <i class="fa-solid fa-arrows-to-eye mr-1"></i>รีเซ็ตมุมมอง
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SOS EMERGENCY VIEW -->
+            <section id="tab-sos" class="tab-content absolute inset-0 overflow-y-auto p-5 hidden flex flex-col justify-between bg-stone-900 text-white">
+                <div class="text-center pt-4 space-y-2">
+                    <div class="w-20 h-20 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mx-auto border-2 border-red-500/40 animate-ring">
+                        <i class="fa-solid fa-triangle-exclamation text-4xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-red-500">ระบบขอความช่วยเหลือฉุกเฉิน</h2>
+                    <p class="text-xs text-stone-300 max-w-xs mx-auto">ศูนย์ความปลอดภัยตลาดมหานาค พร้อมดูแลเหตุฉุกเฉิน พยาบาล และระงับเหตุ 24 ชั่วโมง</p>
+                </div>
+
+                <!-- Emergency Action Box -->
+                <div class="bg-stone-800/80 p-4 rounded-2xl border border-red-900/40 space-y-3">
+                    <div class="flex items-center space-x-3 text-red-400">
+                        <i class="fa-solid fa-bell text-xl"></i>
+                        <div>
+                            <h4 class="font-bold text-sm text-white">ส่งสัญญาณไซเรนฉุกเฉิน (SOS Siren)</h4>
+                            <p class="text-[11px] text-stone-300">ส่งเสียงเตือน Dual-Pitch Siren ความถี่สูงเพื่อเรียกเจ้าหน้าที่ รปภ.</p>
+                        </div>
+                    </div>
+                    <button onclick="triggerSosConfirmation()" class="w-full py-3.5 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold rounded-xl shadow-lg shadow-red-900/50 flex items-center justify-center space-x-2 text-base active:scale-98 transition">
+                        <i class="fa-solid fa-bullhorn text-lg"></i>
+                        <span>กดเพื่อส่งสัญญาณ SOS ฉุกเฉิน</span>
+                    </button>
+                </div>
+
+                <!-- Direct Hotline Numbers -->
+                <div class="space-y-2 pb-4">
+                    <p class="text-xs text-stone-400 text-center font-medium">เบอร์โทรศัพท์สายด่วนฉุกเฉินตลาดมหานาค</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <a href="tel:021234567" class="p-3 bg-stone-800 hover:bg-stone-700 rounded-xl border border-stone-700 flex items-center space-x-2 text-amber-300">
+                            <i class="fa-solid fa-phone-volume text-red-400 text-sm"></i>
+                            <div>
+                                <p class="text-[10px] text-stone-400 leading-none">กองการรักษาความปลอดภัย</p>
+                                <p class="text-xs font-bold text-white mt-0.5">02-123-4567</p>
+                            </div>
+                        </a>
+                        <a href="tel:191" class="p-3 bg-stone-800 hover:bg-stone-700 rounded-xl border border-stone-700 flex items-center space-x-2 text-amber-300">
+                            <i class="fa-solid fa-shield-halved text-blue-400 text-sm"></i>
+                            <div>
+                                <p class="text-[10px] text-stone-400 leading-none">เหตุด่วนเหตุร้าย</p>
+                                <p class="text-xs font-bold text-white mt-0.5">191 / 1669</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Smartphone Bottom Tab Navigation Bar -->
+        <nav class="bg-darkwood text-cream border-t border-woodaccent px-2 py-1.5 flex justify-around items-center z-30 shrink-0">
+            <button onclick="switchTab('home')" id="nav-home" class="nav-btn active flex flex-col items-center py-1 px-3 text-terracotta">
+                <i class="fa-solid fa-house text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">หน้าหลัก</span>
+            </button>
+            <button onclick="switchTab('stalls')" id="nav-stalls" class="nav-btn flex flex-col items-center py-1 px-3 text-cream/60 hover:text-amber-200">
+                <i class="fa-solid fa-store text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">แผงค้า</span>
+            </button>
+            <button onclick="switchTab('map')" id="nav-map" class="nav-btn flex flex-col items-center py-1 px-3 text-cream/60 hover:text-amber-200">
+                <i class="fa-solid fa-map-location-dot text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">แผนที่</span>
+            </button>
+            <button onclick="switchTab('sos')" id="nav-sos" class="nav-btn flex flex-col items-center py-1 px-3 text-cream/60 hover:text-red-400">
+                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                <span class="text-[10px] mt-0.5 font-medium">SOS</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- 1. SHOP DETAILS MODAL -->
+    <div id="shopDetailModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[2000] hidden flex items-end md:items-center justify-center p-0 md:p-4">
+        <div class="bg-cream text-darkwood w-full max-w-md rounded-t-3xl md:rounded-3xl overflow-hidden max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <!-- Modal Header Image -->
+            <div class="relative h-44 bg-stone-800 shrink-0">
+                <img id="modalShopImg" src="" alt="Fruit Shop" class="w-full h-full object-cover">
+                <button onclick="closeShopModal()" class="absolute top-3 right-3 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-black transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="absolute bottom-2 left-3 bg-terracotta text-cream text-xs font-bold px-2.5 py-1 rounded-lg shadow">
+                    <span id="modalStallNo">แผง A01</span>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-4 overflow-y-auto space-y-3 flex-1">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 id="modalShopName" class="text-xl font-bold text-darkwood leading-tight">ชื่อร้านค้า</h3>
+                        <p id="modalShopCategory" class="text-xs text-amber-900/80 font-medium mt-0.5">ประเภทผลไม้</p>
+                    </div>
+                    <div class="text-right">
+                        <span id="modalShopStatus" class="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-md">เปิดบริการ</span>
+                        <div class="text-amber-600 text-xs mt-1 font-bold">
+                            <i class="fa-solid fa-star text-amber-500 mr-1"></i><span id="modalShopRating">4.9</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Phone Calling Button -->
+                <div class="bg-creamdand p-3 rounded-xl border border-amber-900/10 flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] text-amber-900/70 font-semibold uppercase tracking-wider">ติดต่อร้านค้าโดยตรง</p>
+                        <p id="modalShopPhoneText" class="text-sm font-bold text-darkwood">081-234-5678</p>
+                    </div>
+                    <a id="modalShopPhoneCallBtn" href="tel:0812345678" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow transition">
+                        <i class="fa-solid fa-phone"></i>
+                        <span>โทรออก</span>
+                    </a>
+                </div>
+
+                <!-- Itemized Product Price List -->
+                <div>
+                    <h4 class="font-bold text-sm text-darkwood mb-2 flex items-center">
+                        <i class="fa-solid fa-tags text-terracotta mr-1.5"></i>รายการสินค้าและราคา
+                    </h4>
+                    <div id="modalProductList" class="space-y-1.5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer Actions -->
+            <div class="p-3 bg-creamdand border-t border-amber-900/10 flex space-x-2 shrink-0">
+                <button onclick="showShopLocationQR()" class="flex-1 py-2.5 bg-darkwood hover:bg-woodaccent text-amber-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow transition">
+                    <i class="fa-solid fa-qrcode text-terracotta"></i>
+                    <span>QR ตำแหน่งร้านค้า</span>
+                </button>
+                <button onclick="viewStallOnMapFromModal()" class="flex-1 py-2.5 bg-terracotta hover:bg-amber-800 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow transition">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span>นำทางบนแผนที่</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. SHOP LOCATION QR CODE MODAL -->
+    <div id="shopQRModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[2200] hidden flex items-center justify-center p-4">
+        <div class="bg-cream text-darkwood w-full max-w-xs rounded-2xl p-5 text-center space-y-3 shadow-2xl relative">
+            <button onclick="closeShopQRModal()" class="absolute top-3 right-3 text-darkwood/60 hover:text-darkwood text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="font-bold text-base text-darkwood">QR ตำแหน่งร้านค้า</h3>
+            <p id="qrStallTitle" class="text-xs text-terracotta font-semibold">แผง A01 - ร้านเจ้เพ็ญ</p>
+            
+            <div id="qrcodeCanvas" class="bg-white p-3 rounded-xl border border-amber-900/20 shadow-inner flex items-center justify-center min-h-[160px] mx-auto"></div>
+            
+            <p class="text-[11px] text-amber-900/70">สแกนเพื่อรับพิกัดแผงค้าและนำทางในตลาด</p>
+            <button onclick="closeShopQRModal()" class="w-full py-2 bg-darkwood text-cream rounded-xl text-xs font-bold">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+
+    <!-- 3. DEVELOPER PIN MODAL -->
+    <div id="devPinModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[2500] hidden flex items-center justify-center p-4">
+        <div class="bg-darkwood text-cream w-full max-w-xs rounded-2xl p-5 space-y-4 border border-woodaccent shadow-2xl relative">
+            <button onclick="closeDevPinModal()" class="absolute top-3 right-3 text-cream/60 hover:text-cream">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center">
+                <div class="w-12 h-12 bg-terracotta text-cream rounded-full flex items-center justify-center mx-auto mb-2 text-xl shadow">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="font-bold text-base text-amber-200">เข้าสู่โหมดผู้พัฒนา</h3>
+                <p class="text-xs text-cream/70 mt-0.5">กรอกรหัส PIN 10 หลักเพื่อเข้าใช้งาน</p>
+            </div>
+
+            <div>
+                <input type="password" id="devPinInput" maxlength="10" placeholder="กรอก PIN 10 หลัก" class="w-full text-center tracking-widest text-lg py-2 bg-woodaccent border border-amber-700/50 rounded-xl text-amber-200 placeholder-cream/30 focus:outline-none focus:ring-2 focus:ring-terracotta">
+            </div>
+
+            <button onclick="verifyDevPin()" class="w-full py-2.5 bg-terracotta hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow transition">
+                ยืนยันรหัส PIN
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. DEVELOPER CONTROL PANEL MODAL (Includes Shrink-To-Fit Image Attachment) -->
+    <div id="devPanelModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[2600] hidden flex items-center justify-center p-4">
+        <div class="bg-darkwood text-cream w-full max-w-md rounded-2xl p-5 space-y-4 border border-terracotta shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-woodaccent pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-sliders text-terracotta text-lg"></i>
+                    <h3 class="font-bold text-base text-amber-200">แผงควบคุมผู้พัฒนา (Dev Mode)</h3>
+                </div>
+                <button onclick="closeDevPanelModal()" class="text-cream/60 hover:text-cream">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Developer Tool 1: Floorplan Map Image Attachment with Shrink To Fit -->
+            <div class="bg-woodaccent p-3.5 rounded-xl border border-amber-800/40 space-y-2">
+                <label class="block text-xs font-bold text-amber-200">
+                    <i class="fa-solid fa-file-image mr-1 text-terracotta"></i>แนบไฟล์ภาพแผนผังผังตลาด (Shrink to fit)
+                </label>
+                <p class="text-[11px] text-cream/70">
+                    อัปโหลดไฟล์ภาพผังตลาด ระบบจะคำนวณ <code class="text-amber-300">naturalWidth</code> & <code class="text-amber-300">naturalHeight</code> เพื่อปรับขนาด <code class="text-amber-300">map.fitBounds()</code> พอดีหน้าจอโดยภาพไม่ยืด
+                </p>
+                <input type="file" id="floorplanFileInput" accept="image/*" onchange="handleFloorplanUpload(event)" class="block w-full text-xs text-cream/80 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-terracotta file:text-white hover:file:bg-amber-700 cursor-pointer">
+            </div>
+
+            <!-- Developer Tool 2: Edit Marquee Broadcast Announcement -->
+            <div class="bg-woodaccent p-3.5 rounded-xl border border-amber-800/40 space-y-2">
+                <label class="block text-xs font-bold text-amber-200">
+                    <i class="fa-solid fa-bullhorn mr-1 text-terracotta"></i>แก้ไขข้อความประกาศตัววิ่ง (Marquee Text)
+                </label>
+                <textarea id="devMarqueeInput" rows="2" class="w-full p-2 text-xs bg-darkwood text-cream border border-amber-800/60 rounded-lg focus:outline-none focus:ring-1 focus:ring-terracotta"></textarea>
+                <button onclick="updateMarqueeText()" class="w-full py-1.5 bg-terracotta text-white rounded-lg text-xs font-bold">
+                    อัปเดตข้อความประกาศ
+                </button>
+            </div>
+
+            <!-- Developer Tool 3: Toggle Draggable Markers & Export Coordinates -->
+            <div class="bg-woodaccent p-3.5 rounded-xl border border-amber-800/40 space-y-2">
+                <label class="block text-xs font-bold text-amber-200">
+                    <i class="fa-solid fa-map-pin mr-1 text-terracotta"></i>จัดการตำแหน่งหมุดแผงค้า (Marker Drag)
+                </label>
+                <div class="flex space-x-2">
+                    <button id="toggleDragBtn" onclick="toggleMarkerDraggable()" class="flex-1 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-bold">
+                        เปิดโหมดลากหมุด (Disabled)
+                    </button>
+                    <button onclick="exportPinCoordinates()" class="flex-1 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold">
+                        ส่งออกพิกัด JSON
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="closeDevPanelModal()" class="w-full py-2 bg-darkwood text-cream/80 hover:text-white rounded-xl text-xs font-bold border border-amber-900/40">
+                ปิดแผงควบคุม
+            </button>
+        </div>
+    </div>
+
+    <!-- 5. SOS CONFIRMATION DIALOG -->
+    <div id="sosConfirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[3000] hidden flex items-center justify-center p-4">
+        <div class="bg-stone-900 text-white w-full max-w-xs rounded-2xl p-5 space-y-4 border border-red-600/50 shadow-2xl text-center">
+            <div class="w-14 h-14 bg-red-600/20 text-red-500 rounded-full flex items-center justify-center mx-auto border border-red-500 animate-pulse">
+                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-lg text-red-500">ยืนยันสัญญาณ SOS</h3>
+                <p class="text-xs text-stone-300 mt-1">คุณต้องการส่งสัญญาณฉุกเฉิน SOS ใช่หรือไม่?</p>
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button onclick="closeSosConfirmModal()" class="flex-1 py-2.5 bg-stone-800 text-stone-300 hover:bg-stone-700 rounded-xl text-xs font-bold">
+                    ยกเลิก
+                </button>
+                <button onclick="startSosSiren()" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-lg">
+                    ยืนยันส่ง SOS
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. FULLSCREEN SOS FLASHING SIREN ALERT OVERLAY -->
+    <div id="sosActiveOverlay" class="fixed inset-0 z-[4000] hidden flex flex-col items-center justify-between p-6 sos-active text-white">
+        <div class="pt-8 text-center space-y-2">
+            <i class="fa-solid fa-triangle-exclamation text-6xl text-amber-300 animate-bounce"></i>
+            <h1 class="text-3xl font-black text-white tracking-wider">สถาวะฉุกเฉิน SOS</h1>
+            <p class="text-sm font-semibold text-amber-200">กำลังส่งเสียงไซเรนฉุกเฉินและแจ้งศูนย์รปภ.</p>
+        </div>
+
+        <div class="text-center space-y-3 bg-black/40 backdrop-blur-md p-5 rounded-2xl border border-white/20 max-w-xs w-full">
+            <i class="fa-solid fa-volume-high text-4xl text-amber-300 animate-pulse"></i>
+            <p class="text-xs text-stone-200">เสียง Dual-Pitch Siren (700Hz / 950Hz) ทำงานเรียบร้อยแล้ว</p>
+        </div>
+
+        <div class="w-full max-w-xs pb-8">
+            <button onclick="stopSosSiren()" class="w-full py-4 bg-white text-red-700 hover:bg-stone-100 font-extrabold text-base rounded-2xl shadow-2xl active:scale-95 transition tracking-wide border-2 border-red-600">
+                <i class="fa-solid fa-circle-stop mr-2"></i>หยุดสัญญาณ SOS
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Master Data: 35 Fruit Stalls with strictly matching items, prices, direct phones & map coordinates
+        const STALLS_DATA = [
+            {
+                id: 'A01',
+                name: 'ร้านเจ้เพ็ญ ทุเรียนหมอนทองระยอง',
+                stallNo: 'A01',
+                category: 'ทุเรียน',
+                phone: '081-234-5601',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1587334274328-64186a80aeee?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 120],
+                products: [
+                    { name: 'ทุเรียนหมอนทอง เกรด A (ระยอง)', price: '160 บาท/กก.' },
+                    { name: 'ทุเรียนชะนีไข่แกะเนื้อ', price: '180 บาท/กล่อง' },
+                    { name: 'ทุเรียนก้านยาวจันทบุรี', price: '220 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A02',
+                name: 'ร้านป้าสมศรี มะม่วงน้ำดอกไม้ทอง',
+                stallNo: 'A02',
+                category: 'มะม่วง',
+                phone: '081-234-5602',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 220],
+                products: [
+                    { name: 'มะม่วงน้ำดอกไม้ทองสุก', price: '75 บาท/กก.' },
+                    { name: 'มะม่วงเขียวเสวยดิบ', price: '50 บาท/กก.' },
+                    { name: 'มะม่วงอกร่องโบราณ', price: '90 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A03',
+                name: 'มังคุดนครศรีฯ เจ๊สายชล',
+                stallNo: 'A03',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5603',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1546548970-71785318a17b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 320],
+                products: [
+                    { name: 'มังคุดออร์แกนิคนครศรีฯ', price: '85 บาท/กก.' },
+                    { name: 'มังคุดผิวมันคัดพิเศษ', price: '110 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A04',
+                name: 'ผลไม้นำเข้า เฮียไช้ (Grapes & Import)',
+                stallNo: 'A04',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5604',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1537640538966-79f369143f8f?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 420],
+                products: [
+                    { name: 'องุ่นไซน์มัสแคทญี่ปุ่น', price: '350 บาท/กล่อง' },
+                    { name: 'องุ่นไร้เมล็ดออสเตรเลีย', price: '190 บาท/กก.' },
+                    { name: 'เชอร์รี่แทสเมเนีย', price: '450 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A05',
+                name: 'ส้มสายน้ำผึ้งฝาง ป้าเจียร',
+                stallNo: 'A05',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5605',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 520],
+                products: [
+                    { name: 'ส้มสายน้ำผึ้งฝาง เบอร์ 6', price: '65 บาท/กก.' },
+                    { name: 'ส้มเขียวหวานโชกุน', price: '80 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A06',
+                name: 'แดงแตงโมจินตหรา ลุงดำ',
+                stallNo: 'A06',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5606',
+                rating: '4.6',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1587049352847-4a222e784d38?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 620],
+                products: [
+                    { name: 'แตงโมจินตหราเนื้อแดง', price: '35 บาท/ลูก' },
+                    { name: 'แตงโมกินรีไร้เมล็ด', price: '50 บาท/ลูก' }
+                ]
+            },
+            {
+                id: 'A07',
+                name: 'มะพร้าวเผานครปฐม พี่สมศักดิ์',
+                stallNo: 'A07',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5607',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1544378730-8b5104b18790?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 720],
+                products: [
+                    { name: 'มะพร้าวน้ำหอมเผาแท้', price: '35 บาท/ลูก' },
+                    { name: 'น้ำมะพร้าวสด 100%', price: '25 บาท/ขวด' }
+                ]
+            },
+            {
+                id: 'A08',
+                name: 'ร้านยายทอง ผลไม้อบแห้งและแช่อิ่ม',
+                stallNo: 'A08',
+                category: 'ผลไม้อบแห้ง',
+                phone: '081-234-5608',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1608686207856-001b95cf60ca?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [180, 820],
+                products: [
+                    { name: 'มะม่วงอบแห้งเกรดส่งออก', price: '120 บาท/ถุง' },
+                    { name: 'ทุเรียนทอดกรอบคัดเกรด', price: '180 บาท/ถุง' },
+                    { name: 'สับปะรดภูแลอบแห้ง', price: '100 บาท/ถุง' }
+                ]
+            },
+            {
+                id: 'A09',
+                name: 'เงาะโรงเรียนตราด ป้าแมว',
+                stallNo: 'A09',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5609',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 120],
+                products: [
+                    { name: 'เงาะโรงเรียนหวานกรอบ', price: '55 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'A10',
+                name: 'ร้านลุงหวัง มะละกอเรดเลดี้',
+                stallNo: 'A10',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5610',
+                rating: '4.6',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1517260739337-6799d239ce83?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 220],
+                products: [
+                    { name: 'มะละกอเรดเลดี้สุก', price: '45 บาท/กก.' },
+                    { name: 'มะละกอดำเนินส้มตำ', price: '25 บาท/กก.' }
+                ]
+            },
+            /* B Zone Stalls */
+            {
+                id: 'B01',
+                name: 'แก้วมังกรเนื้อแดง เจ๊จุ๋ม',
+                stallNo: 'B01',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5611',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1527325678964-549216468488?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 320],
+                products: [
+                    { name: 'แก้วมังกรเนื้อแดงสการ์เล็ต', price: '60 บาท/กก.' },
+                    { name: 'แก้วมังกรเนื้อขาว', price: '45 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'B02',
+                name: 'ลำไยอีดอเชียงใหม่ เฮียซ้ง',
+                stallNo: 'B02',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5612',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 420],
+                products: [
+                    { name: 'ลำไยอีดอเกรด 3AA', price: '70 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'B03',
+                name: 'ลิ้นจี่ฮ่องห้วย ลุงปรีชา',
+                stallNo: 'B03',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5613',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1587334274328-64186a80aeee?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 520],
+                products: [
+                    { name: 'ลิ้นจี่ฮ่องห้วยจักรพรรดิ์', price: '110 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'B04',
+                name: 'ส้มโอขาวใหญ่ชัยนาท ป้านวล',
+                stallNo: 'B04',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5614',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1557800636-894a64c1696f?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 620],
+                products: [
+                    { name: 'ส้มโอขาวใหญ่แกะพร้อมทาน', price: '90 บาท/แพ็ค' },
+                    { name: 'ส้มโอทับทิมสยาม', price: '150 บาท/ลูก' }
+                ]
+            },
+            {
+                id: 'B05',
+                name: 'สับปะรดภูแลเชียงราย พี่ชาติ',
+                stallNo: 'B05',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5615',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 720],
+                products: [
+                    { name: 'สับปะรดภูแลปอกพร้อมทาน', price: '50 บาท/ถุง' },
+                    { name: 'สับปะรดศรีราชา', price: '30 บาท/ลูก' }
+                ]
+            },
+            {
+                id: 'B06',
+                name: 'ฝรั่งกิมจูบ้านแพ้ว ป้าจิตร',
+                stallNo: 'B06',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5616',
+                rating: '4.6',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1536511153982-843818e612fa?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [280, 820],
+                products: [
+                    { name: 'ฝรั่งกิมจูไร้เมล็ด', price: '40 บาท/กก.' },
+                    { name: 'ฝรั่งหงเป่าสือเนื้อแดง', price: '80 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'B07',
+                name: 'เสาวรสโครงการหลวง เจ๊น้อย',
+                stallNo: 'B07',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5617',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 120],
+                products: [
+                    { name: 'เสาวรสหวานพันธุ์หม่านเทียนซิง', price: '95 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'B08',
+                name: 'แอปเปิ้ลฟูจินำเข้า เฮียโต',
+                stallNo: 'B08',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5618',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 220],
+                products: [
+                    { name: 'แอปเปิ้ลฟูจิญี่ปุ่นเกรด A', price: '45 บาท/ลูก' },
+                    { name: 'แอปเปิ้ลเอ็นวี่นิวซีแลนด์', price: '65 บาท/ลูก' }
+                ]
+            },
+            {
+                id: 'B09',
+                name: 'กีวี่ทองนิวซีแลนด์ เจ๊พร',
+                stallNo: 'B09',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5619',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1585059819970-31368297b831?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 320],
+                products: [
+                    { name: 'กีวี่ทอง Zespri SunGold', price: '120 บาท/กล่อง (3ลูก)' }
+                ]
+            },
+            {
+                id: 'B10',
+                name: 'สตรอเบอร์รี่พันธุ์ 80 ลุงนนท์',
+                stallNo: 'B10',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5620',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 420],
+                products: [
+                    { name: 'สตรอเบอร์รี่โครงการหลวง 80', price: '150 บาท/กล่อง' }
+                ]
+            },
+            /* C Zone Stalls */
+            {
+                id: 'C01',
+                name: 'กล้วยหอมทองปทุม ลุงบุญ',
+                stallNo: 'C01',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5621',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 520],
+                products: [
+                    { name: 'กล้วยหอมทองคัดเกรด', price: '120 บาท/หวี' },
+                    { name: 'กล้วยไข่กำแพงเพชร', price: '60 บาท/หวี' }
+                ]
+            },
+            {
+                id: 'C02',
+                name: 'ลองกองสุไหงโก-ลก เจ๊ติ๋ม',
+                stallNo: 'C02',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5622',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1546548970-71785318a17b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 620],
+                products: [
+                    { name: 'ลองกองตันหยงมัสเกรด A', price: '85 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'C03',
+                name: 'สละสุมาลีตราด พี่เอก',
+                stallNo: 'C03',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5623',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1608686207856-001b95cf60ca?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 720],
+                products: [
+                    { name: 'สละสุมาลีเนื้อแน่นหวานหอม', price: '90 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'C04',
+                name: 'พลับหวานเกาหลี เฮียฮวด',
+                stallNo: 'C04',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5624',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [380, 820],
+                products: [
+                    { name: 'ลูกพลับหวานเกาหลีสด', price: '180 บาท/แพ็ค' }
+                ]
+            },
+            {
+                id: 'C05',
+                name: 'ผลไม้สดตามฤดูกาล เจ๊แดง',
+                stallNo: 'C05',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5625',
+                rating: '4.6',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 120],
+                products: [
+                    { name: 'ชุดผลไม้สดจัดชุดพร้อมทาน', price: '100 บาท/กล่อง' }
+                ]
+            },
+            {
+                id: 'C06',
+                name: 'ทุเรียนก้านยาวจันทบุรี เฮียเล้ง',
+                stallNo: 'C06',
+                category: 'ทุเรียน',
+                phone: '081-234-5626',
+                rating: '5.0',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1587334274328-64186a80aeee?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 220],
+                products: [
+                    { name: 'ทุเรียนก้านยาวจันทบุรีเกรดพรีเมี่ยม', price: '320 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'C07',
+                name: 'มะม่วงเขียวเสวยฉะเชิงเทรา ป้าจิ๋ม',
+                stallNo: 'C07',
+                category: 'มะม่วง',
+                phone: '081-234-5627',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 320],
+                products: [
+                    { name: 'มะม่วงเขียวเสวยมันกรอบ', price: '55 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'C08',
+                name: 'เชอร์รี่นำเข้าแทสเมเนีย เฮียตั้ม',
+                stallNo: 'C08',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5628',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 420],
+                products: [
+                    { name: 'เชอร์รี่นำเข้าไซส์ Jumbo 30mm+', price: '590 บาท/กล่อง' }
+                ]
+            },
+            {
+                id: 'C09',
+                name: 'ส้มเช้งบางมด ป้านิด',
+                stallNo: 'C09',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5629',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 520],
+                products: [
+                    { name: 'ส้มเช้งบางมดฉ่ำน้ำ', price: '95 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'C10',
+                name: 'ผลไม้นำเข้าพรีเมี่ยม Madam Fruit',
+                stallNo: 'C10',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5630',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 620],
+                products: [
+                    { name: 'กระเช้าผลไม้นำเข้าพรีเมี่ยม', price: '1,500 บาท/กระเช้า' }
+                ]
+            },
+            /* D Zone Stalls */
+            {
+                id: 'D01',
+                name: 'แคนตาลูปซันเลดี้ ลุงวิทย์',
+                stallNo: 'D01',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5631',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1587049352847-4a222e784d38?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 720],
+                products: [
+                    { name: 'แคนตาลูปซันเลดี้เนื้อส้ม', price: '65 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'D02',
+                name: 'เมล่อนญี่ปุ่นกรีนเนื้อเขียว พี่เก่ง',
+                stallNo: 'D02',
+                category: 'ผลไม้นำเข้า',
+                phone: '081-234-5632',
+                rating: '4.9',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [480, 820],
+                products: [
+                    { name: 'เมล่อนญี่ปุ่นกรีนเน็ต', price: '250 บาท/ลูก' }
+                ]
+            },
+            {
+                id: 'D03',
+                name: 'มะขามหวานเพชรบูรณ์ เจ๊อุ๊',
+                stallNo: 'D03',
+                category: 'ผลไม้อบแห้ง',
+                phone: '081-234-5633',
+                rating: '4.8',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1608686207856-001b95cf60ca?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [580, 120],
+                products: [
+                    { name: 'มะขามหวานพันธุ์ประกายทอง', price: '130 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'D04',
+                name: 'ชมพู่ทับทิมจันทร์เพชรบุรี ป้าแป๋ว',
+                stallNo: 'D04',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5634',
+                rating: '4.7',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [580, 220],
+                products: [
+                    { name: 'ชมพู่ทับทิมจันทร์เพชรบุรี', price: '75 บาท/กก.' }
+                ]
+            },
+            {
+                id: 'D05',
+                name: 'มะพลับหวาน ลุงสมพงษ์',
+                stallNo: 'D05',
+                category: 'ผลไม้ตามฤดูกาล',
+                phone: '081-234-5635',
+                rating: '4.6',
+                status: 'เปิดบริการ',
+                image: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=600&q=80',
+                mapCoords: [580, 320],
+                products: [
+                    { name: 'มะพลับหวานเชื่อมสด', price: '80 บาท/กก.' }
+                ]
+            }
+        ];
+
+        // App Global State Variable Definition
+        let map = null;
+        let mapImageOverlay = null;
+        let mapMarkers = {};
+        let currentSelectedStall = null;
+        let isDevModeUnlocked = false;
+        let isMarkerDraggable = false;
+        let audioCtx = null;
+        let sosOscillator = null;
+        let sosInterval = null;
+        let activeCategory = 'ALL';
+
+        window.onload = function() {
+            updateClock();
+            setInterval(updateClock, 1000);
+            renderFeaturedStalls();
+            renderStallsList(STALLS_DATA);
+            initLeafletMap();
+        };
+
+        // Real-time Clock Function
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const mins = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('currentTime').innerText = `${hours}:${mins}`;
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-terracotta');
+                btn.classList.add('text-cream/60');
+            });
+
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            const activeNav = document.getElementById(`nav-${tabName}`);
+
+            if (activeTab) activeTab.classList.remove('hidden');
+            if (activeNav) {
+                activeNav.classList.remove('text-cream/60');
+                activeNav.classList.add('text-terracotta');
+            }
+
+            if (tabName === 'map' && map) {
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 200);
+            }
+        }
+
+        function renderFeaturedStalls() {
+            const container = document.getElementById('featuredStallsGrid');
+            if (!container) return;
+            const featured = STALLS_DATA.slice(0, 6);
+            container.innerHTML = featured.map(stall => `
+                <div onclick="openShopModal('${stall.id}')" class="bg-creamdand border border-amber-900/15 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer flex flex-col justify-between">
+                    <div class="relative h-24 overflow-hidden">
+                        <img src="${stall.image}" alt="${stall.name}" class="w-full h-full object-cover">
+                        <span class="absolute top-1.5 left-1.5 bg-terracotta text-cream text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                            ${stall.stallNo}
+                        </span>
+                    </div>
+                    <div class="p-2 flex-1 flex flex-col justify-between">
+                        <div>
+                            <h4 class="font-bold text-xs text-darkwood line-clamp-1">${stall.name}</h4>
+                            <p class="text-[10px] text-amber-900/70 font-medium">${stall.category}</p>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between text-[11px]">
+                            <span class="text-emerald-700 font-bold">${stall.products[0]?.price || 'ราคาดี'}</span>
+                            <span class="text-amber-600 font-semibold"><i class="fa-solid fa-star text-[10px]"></i> ${stall.rating}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderStallsList(data) {
+            const container = document.getElementById('fullStallsList');
+            if (!container) return;
+
+            if (data.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-amber-900/60 text-xs">
+                        <i class="fa-solid fa-store-slash text-3xl mb-2 text-terracotta opacity-50"></i>
+                        <p>ไม่พบแผงค้าที่ตรงกับเงื่อนไขการค้นหา</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = data.map(stall => `
+                <div onclick="openShopModal('${stall.id}')" class="bg-creamdand border border-amber-900/15 p-2.5 rounded-xl flex items-center justify-between shadow-sm hover:border-terracotta transition cursor-pointer">
+                    <div class="flex items-center space-x-3">
+                        <img src="${stall.image}" alt="${stall.name}" class="w-14 h-14 rounded-lg object-cover border border-amber-900/10">
+                        <div>
+                            <div class="flex items-center space-x-1.5">
+                                <span class="bg-terracotta text-cream font-bold text-[10px] px-1.5 py-0.5 rounded">${stall.stallNo}</span>
+                                <h4 class="font-bold text-xs text-darkwood">${stall.name}</h4>
+                            </div>
+                            <p class="text-[11px] text-amber-900/70 mt-0.5">${stall.category}</p>
+                            <p class="text-[10px] text-emerald-700 font-medium">${stall.products[0]?.name} - ${stall.products[0]?.price}</p>
+                        </div>
+                    </div>
+                    <a href="tel:${stall.phone.replace(/-/g,'')}" onclick="event.stopPropagation()" class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-700 shadow shrink-0">
+                        <i class="fa-solid fa-phone text-xs"></i>
+                    </a>
+                </div>
+            `).join('');
+        }
+
+        function handleHomeSearch(val) {
+            const clearBtn = document.getElementById('clearSearchBtn');
+            if (val.trim()) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+            applyFilters();
+        }
+
+        function clearSearch() {
+            document.getElementById('homeSearchInput').value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            applyFilters();
+        }
+
+        function filterCategory(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.classList.remove('bg-terracotta', 'text-cream');
+                btn.classList.add('bg-creamdand', 'text-darkwood');
+            });
+            event.target.classList.remove('bg-creamdand', 'text-darkwood');
+            event.target.classList.add('bg-terracotta', 'text-cream');
+            applyFilters();
+        }
+
+        function filterStallsList(val) {
+            const filtered = STALLS_DATA.filter(s => 
+                s.name.includes(val) || 
+                s.stallNo.includes(val) || 
+                s.category.includes(val) ||
+                s.products.some(p => p.name.includes(val))
+            );
+            renderStallsList(filtered);
+        }
+
+        function applyFilters() {
+            const query = (document.getElementById('homeSearchInput')?.value || '').toLowerCase();
+            let filtered = STALLS_DATA;
+
+            if (activeCategory !== 'ALL') {
+                filtered = filtered.filter(s => s.category === activeCategory);
+            }
+
+            if (query) {
+                filtered = filtered.filter(s => 
+                    s.name.toLowerCase().includes(query) || 
+                    s.stallNo.toLowerCase().includes(query) || 
+                    s.category.toLowerCase().includes(query) ||
+                    s.products.some(p => p.name.toLowerCase().includes(query))
+                );
+            }
+
+            renderStallsList(filtered);
+        }
+
+        function initLeafletMap() {
+            // Leaflet L.CRS.Simple setup for flat map coordinates
+            const mapWidth = 1000;
+            const mapHeight = 700;
+            const bounds = [[0, 0], [mapHeight, mapWidth]];
+
+            map = L.map('leafletMap', {
+                crs: L.CRS.Simple,
+                minZoom: -1,
+                maxZoom: 2,
+                zoomControl: true,
+                attributionControl: false
+            });
+
+            // Create dynamic floor plan canvas overlay background
+            const floorplanCanvas = document.createElement('canvas');
+            floorplanCanvas.width = mapWidth;
+            floorplanCanvas.height = mapHeight;
+            const ctx = floorplanCanvas.getContext('2d');
+
+            // Draw Default Aesthetic Map Floorplan Pattern
+            ctx.fillStyle = '#2E1A0C';
+            ctx.fillRect(0, 0, mapWidth, mapHeight);
+
+            // Walkways & Stall Zones
+            ctx.fillStyle = '#3E2413';
+            ctx.fillRect(50, 50, 900, 600);
+
+            // Grid Lines
+            ctx.strokeStyle = '#4A2C18';
+            ctx.lineWidth = 2;
+            for (let x = 100; x < mapWidth; x += 100) {
+                ctx.beginPath(); ctx.moveTo(x, 50); ctx.lineTo(x, 650); ctx.stroke();
+            }
+            for (let y = 100; y < mapHeight; y += 100) {
+                ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(950, y); ctx.stroke();
+            }
+
+            // Market Title Banner on Canvas
+            ctx.fillStyle = '#A83E0E';
+            ctx.fillRect(350, 20, 300, 45);
+            ctx.fillStyle = '#FDFBF7';
+            ctx.font = 'bold 20px Kanit, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('ผังแผงค้าตลาดมหานาค (MAHANAK FLOOR PLAN)', 500, 50);
+
+            const overlayUrl = floorplanCanvas.toDataURL();
+            mapImageOverlay = L.imageOverlay(overlayUrl, bounds).addTo(map);
+
+            map.fitBounds(bounds);
+            map.setMaxBounds(bounds);
+
+            // Add Stall Markers (Displaying Stall Numbers without "ZONE")
+            addStallMarkersToMap();
+        }
+
+        function addStallMarkersToMap() {
+            STALLS_DATA.forEach(stall => {
+                const markerIcon = L.divIcon({
+                    className: 'custom-leaflet-icon',
+                    html: `<div class="stall-marker" id="pin-${stall.id}">${stall.stallNo}</div>`,
+                    iconSize: [40, 24],
+                    iconAnchor: [20, 12]
+                });
+
+                const marker = L.marker(stall.mapCoords, {
+                    icon: markerIcon,
+                    draggable: isMarkerDraggable
+                }).addTo(map);
+
+                marker.on('click', () => {
+                    openShopModal(stall.id);
+                });
+
+                marker.on('dragend', (e) => {
+                    const newPos = e.target.getLatLng();
+                    stall.mapCoords = [Math.round(newPos.lat), Math.round(newPos.lng)];
+                });
+
+                mapMarkers[stall.id] = marker;
+            });
+        }
+
+        function resetMapView() {
+            if (map && mapImageOverlay) {
+                map.fitBounds(mapImageOverlay.getBounds());
+            }
+        }
+
+        function handleFloorplanUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // Extract natural dimensions for exact scaling
+                    const naturalW = img.naturalWidth || img.width;
+                    const naturalH = img.naturalHeight || img.height;
+                    const newBounds = [[0, 0], [naturalH, naturalW]];
+
+                    // Remove existing overlay if present
+                    if (mapImageOverlay) {
+                        map.removeLayer(mapImageOverlay);
+                    }
+
+                    // Create new overlay and apply Shrink-To-Fit
+                    mapImageOverlay = L.imageOverlay(e.target.result, newBounds).addTo(map);
+                    
+                    // Automatically shrink and fit image inside view without distortion or overflow
+                    map.fitBounds(newBounds, { padding: [10, 10] });
+                    map.setMaxBounds(newBounds);
+                    map.invalidateSize();
+
+                    closeDevPanelModal();
+                    switchTab('map');
+
+                    alert(`อัปโหลดและปรับขนาดแผนผังภาพแบบ Shrink to fit สำเร็จ!\nขนาดต้นฉบับ: ${naturalW} x ${naturalH} px`);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function openShopModal(stallId) {
+            const stall = STALLS_DATA.find(s => s.id === stallId);
+            if (!stall) return;
+
+            currentSelectedStall = stall;
+
+            document.getElementById('modalShopImg').src = stall.image;
+            document.getElementById('modalStallNo').innerText = `แผง ${stall.stallNo}`;
+            document.getElementById('modalShopName').innerText = stall.name;
+            document.getElementById('modalShopCategory').innerText = `หมวดหมู่: ${stall.category}`;
+            document.getElementById('modalShopStatus').innerText = stall.status;
+            document.getElementById('modalShopRating').innerText = stall.rating;
+            document.getElementById('modalShopPhoneText').innerText = stall.phone;
+            document.getElementById('modalShopPhoneCallBtn').href = `tel:${stall.phone.replace(/-/g, '')}`;
+
+            // Itemized Product Price List
+            const productContainer = document.getElementById('modalProductList');
+            productContainer.innerHTML = stall.products.map(prod => `
+                <div class="flex justify-between items-center bg-creamdand p-2 rounded-lg text-xs border border-amber-900/10">
+                    <span class="font-semibold text-darkwood">${prod.name}</span>
+                    <span class="font-bold text-terracotta">${prod.price}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('shopDetailModal').classList.remove('hidden');
+        }
+
+        function closeShopModal() {
+            document.getElementById('shopDetailModal').classList.add('hidden');
+        }
+
+        function viewStallOnMapFromModal() {
+            closeShopModal();
+            switchTab('map');
+            if (currentSelectedStall && mapMarkers[currentSelectedStall.id]) {
+                const marker = mapMarkers[currentSelectedStall.id];
+                map.setView(marker.getLatLng(), 1);
+                
+                // Highlight Pin
+                document.querySelectorAll('.stall-marker').forEach(el => el.classList.remove('active-pin'));
+                const pinEl = document.getElementById(`pin-${currentSelectedStall.id}`);
+                if (pinEl) pinEl.classList.add('active-pin');
+            }
+        }
+
+        function showShopLocationQR() {
+            if (!currentSelectedStall) return;
+            document.getElementById('qrStallTitle').innerText = `แผง ${currentSelectedStall.stallNo} - ${currentSelectedStall.name}`;
+            const qrContainer = document.getElementById('qrcodeCanvas');
+            qrContainer.innerHTML = '';
+
+            const qrData = `MAHANAK-STALL:${currentSelectedStall.stallNo}|NAME:${currentSelectedStall.name}|POS:${currentSelectedStall.mapCoords.join(',')}`;
+
+            new QRCode(qrContainer, {
+                text: qrData,
+                width: 140,
+                height: 140,
+                colorDark: "#2E1A0C",
+                colorLight: "#FFFFFF",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('shopQRModal').classList.remove('hidden');
+        }
+
+        function closeShopQRModal() {
+            document.getElementById('shopQRModal').classList.add('hidden');
+        }
+
+        function openQRScannerSim() {
+            alert('เปิดกล้องสแกน QR Code ประจำแผงค้า (ระบบจำลองการสแกน)');
+        }
+
+        function openDevPinModal() {
+            document.getElementById('devPinInput').value = '';
+            document.getElementById('devPinModal').classList.remove('hidden');
+        }
+
+        function closeDevPinModal() {
+            document.getElementById('devPinModal').classList.add('hidden');
+        }
+
+        function verifyDevPin() {
+            const pin = document.getElementById('devPinInput').value.trim();
+            if (pin === '1212312121') {
+                isDevModeUnlocked = true;
+                closeDevPinModal();
+                openDevPanelModal();
+            } else {
+                alert('รหัส PIN ไม่ถูกต้อง! กรุณาลองใหม่อีกครั้ง');
+            }
+        }
+
+        function openDevPanelModal() {
+            document.getElementById('devMarqueeInput').value = document.getElementById('marqueeText').innerText.trim();
+            document.getElementById('devPanelModal').classList.remove('hidden');
+        }
+
+        function closeDevPanelModal() {
+            document.getElementById('devPanelModal').classList.add('hidden');
+        }
+
+        function updateMarqueeText() {
+            const newText = document.getElementById('devMarqueeInput').value.trim();
+            if (newText) {
+                document.getElementById('marqueeText').innerText = newText;
+                alert('อัปเดตข้อความประกาศตัววิ่งเรียบร้อยแล้ว');
+            }
+        }
+
+        function toggleMarkerDraggable() {
+            isMarkerDraggable = !isMarkerDraggable;
+            const btn = document.getElementById('toggleDragBtn');
+            btn.innerText = isMarkerDraggable ? 'ปิดโหมดลากหมุด (Enabled)' : 'เปิดโหมดลากหมุด (Disabled)';
+            btn.className = isMarkerDraggable 
+                ? 'flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold'
+                : 'flex-1 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-bold';
+
+            Object.values(mapMarkers).forEach(marker => {
+                if (isMarkerDraggable) marker.dragging.enable();
+                else marker.dragging.disable();
+            });
+        }
+
+        function exportPinCoordinates() {
+            const exportedData = STALLS_DATA.map(s => ({
+                id: s.id,
+                stallNo: s.stallNo,
+                mapCoords: s.mapCoords
+            }));
+
+            const jsonStr = JSON.stringify(exportedData, null, 2);
+            navigator.clipboard?.writeText(jsonStr);
+            alert('คัดลอกพิกัดหมุดแผงค้า (JSON) ลง Clipboard เรียบร้อยแล้ว!\n' + jsonStr.substring(0, 150) + '...');
+        }
+
+        function triggerSosConfirmation() {
+            document.getElementById('sosConfirmModal').classList.remove('hidden');
+        }
+
+        function closeSosConfirmModal() {
+            document.getElementById('sosConfirmModal').classList.add('hidden');
+        }
+
+        function startSosSiren() {
+            closeSosConfirmModal();
+            document.getElementById('sosActiveOverlay').classList.remove('hidden');
+
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                let freqToggle = false;
+                sosInterval = setInterval(() => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freqToggle ? 700 : 950, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.22);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.22);
+                    freqToggle = !freqToggle;
+                }, 250);
+
+            } catch (err) {
+                console.log('Web Audio API initialized with audio fallback');
+            }
+        }
+
+        function stopSosSiren() {
+            if (sosInterval) {
+                clearInterval(sosInterval);
+                sosInterval = null;
+            }
+            document.getElementById('sosActiveOverlay').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
